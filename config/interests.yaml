@@ -6,6 +6,13 @@
 #   phrasing/context matters more than exact wording.
 # - `weight` scales how much an interest counts (1.0 = normal). Use it to
 #   nudge some topics above others without excluding anything.
+# - `anti_interests` is a soft counterweight, not a filter: same format as
+#   `interests`, but its weighted-max similarity is *subtracted* from the
+#   embedding score, and it's also shown to the local LLM reranker as
+#   "less interested in" context. A story can still surface if it matches
+#   a real interest strongly enough to outweigh the penalty. Use this for
+#   topics you're mildly tired of seeing, not ones you never want to see
+#   -- for that, use `blacklist` instead.
 # - `blacklist` is a hard, stage-0 filter: exact/substring matches on
 #   story title or domain are dropped before any scoring happens. Use it
 #   for topics or sources you never want to see, not for "less interested".
@@ -15,6 +22,21 @@ interests:
   - text: "educational software, digital education, intelligent tutoring system, flashcards, spaced repetition, adaptive learning"
     weight: 1.0
   - text: "urban ecology, foraging, birdwatching"
+    weight: 0.6
+
+# EXAMPLE anti-interests -- replace with your own before running for real.
+anti_interests:
+  - text: "machine-translation, automatic translation, machine translation content with no bridge to or discussion of language acqusition"
+    weight: 0.8
+  - text: "theory of artifical intelligence, LLM paper, machine learning paper, theoretical computer science, AI model comparison, Silicon Valley drama"
+    weight: 0.4
+  - text: "education politics, elementary school education"
+    weight: 0.3
+  - text: "US politics"
+    weight: 0.8
+  - text: "discussion of software that does not involve human interaction at all"
+    weight: 0.9
+  - text: "drama, flame-bait"
     weight: 0.6
 
 blacklist:

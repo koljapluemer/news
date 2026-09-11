@@ -20,6 +20,7 @@ class Blacklist(BaseModel):
 
 class InterestProfile(BaseModel):
     interests: list[InterestEntry]
+    anti_interests: list[InterestEntry] = Field(default_factory=list)
     blacklist: Blacklist = Field(default_factory=Blacklist)
 
 

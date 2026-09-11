@@ -71,6 +71,8 @@ feedback signal to compare against (e.g. which items you actually read).
       "created_at": "...",
       "embedding_score": 0.71,
       "embedding_matches": {"interest text": 0.71, "...": 0.3},
+      "embedding_anti_score": 0.0,
+      "embedding_anti_matches": {"anti-interest text": 0.12},
       "llm_score": 9.0,
       "llm_reason": "Directly about local LLM quantization on consumer GPUs.",
       "final_score": 9.71

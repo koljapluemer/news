@@ -33,11 +33,21 @@ class _Judgement(BaseModel):
 
 def _build_prompt(profile: InterestProfile, item: ScoredItem) -> str:
     interests_block = "\n".join(f"- {i.text}" for i in profile.interests)
+    anti_section = ""
+    if profile.anti_interests:
+        anti_block = "\n".join(f"- {i.text}" for i in profile.anti_interests)
+        anti_section = (
+            "\n\nTopics the reader is less interested in (not a hard "
+            "exclude -- weigh these down, but a story can still score well "
+            "if it's also strongly about a real interest above):\n"
+            f"{anti_block}"
+        )
     text_snippet = f'\nSelf-text: "{item.text[:500]}"' if item.text else ""
     return (
         "You are rating how relevant a HackerNews story is to a reader's "
         "personal interests.\n\n"
-        f"Reader's interests:\n{interests_block}\n\n"
+        f"Reader's interests:\n{interests_block}"
+        f"{anti_section}\n\n"
         f'Story title: "{item.title}"\n'
         f"Story domain: {item.domain or 'n/a'}"
         f"{text_snippet}\n\n"

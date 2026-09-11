@@ -51,8 +51,9 @@ def _fetch_all(cfg: PipelineConfig, window_start: datetime, window_end: datetime
 def run_pipeline(cfg: PipelineConfig) -> Path:
     profile = load_interest_profile(cfg.interests_path)
     logger.info(
-        "Loaded interest profile: {} interests, {} blacklist terms, {} blacklist domains",
+        "Loaded interest profile: {} interests, {} anti-interests, {} blacklist terms, {} blacklist domains",
         len(profile.interests),
+        len(profile.anti_interests),
         len(profile.blacklist.terms),
         len(profile.blacklist.domains),
     )

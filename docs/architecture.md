@@ -42,6 +42,12 @@ LLM judgment) is the expensive step, so it's deliberately restricted to a
 shortlist (default: top 40 by embedding score). This is what makes running
 a 9B local model for reranking practical on a laptop for a daily batch job.
 
+**Anti-interests are a soft counterweight, not a filter.** `anti_interests`
+in `interests.yaml` mirror `interests` (text + weight) but subtract: stage 1
+deducts their weighted-max embedding similarity from the score, and stage 2
+shows them to the LLM as "less interested in" context. Unlike `blacklist`,
+a story can still surface if it matches a real interest strongly enough.
+
 **Raw fetch is cached per calendar day, independent of ranking runs.**
 Raw HN data for a given day doesn't change once fetched; your interest
 profile and ranking logic will. Separating them means you can re-run
@@ -58,10 +64,6 @@ here so they're easy to revisit rather than silently forgotten:
   for text posts) only. Fetching a story's comment tree (via Algolia's
   `items/{id}` endpoint) for shortlisted candidates would be a natural
   stage-1.5 addition if comment content turns out to matter for ranking.
-- **Blacklist is hard-filter only.** `blacklist.terms`/`domains` are exact
-  substring matches in stage 0. A semantic/soft blacklist (embedding
-  similarity to a "topics I don't want" sentence, penalizing rather than
-  excluding) would be a stage-1 addition if hard filters prove too blunt.
 - **Cache freshness isn't validated beyond "file exists for today".** If
   you run twice in one day expecting new stories, use `--force-fetch`;
   there's no automatic staleness check.

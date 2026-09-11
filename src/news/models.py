@@ -49,6 +49,11 @@ class ScoredItem(RawItem):
     embedding_matches: dict[str, float] = Field(default_factory=dict)
     """Per-interest cosine similarity, keyed by the interest text."""
 
+    embedding_anti_score: float = 0.0
+    """Weighted-max cosine similarity to anti-interests, subtracted into embedding_score."""
+    embedding_anti_matches: dict[str, float] = Field(default_factory=dict)
+    """Per-anti-interest cosine similarity, keyed by the anti-interest text."""
+
     llm_score: float | None = None
     llm_reason: str | None = None
     final_score: float | None = None
