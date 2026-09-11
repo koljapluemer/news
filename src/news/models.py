@@ -65,6 +65,8 @@ class RunMetadata(BaseModel):
     window_start: datetime
     window_end: datetime
     source_candidate_count: int
+    source_candidate_counts: dict[str, int] = Field(default_factory=dict)
+    """Raw candidate count per source, for spotting one source dominating volume."""
     hard_filtered_count: int
     shortlisted_count: int
     model_name: str

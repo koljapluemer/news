@@ -14,6 +14,9 @@ src/news/
   sources/
     base.py             NewsSource protocol
     hackernews.py        Algolia HN Search API implementation
+    arxiv.py              Per-category arXiv RSS digest
+    reddit.py              Per-subreddit Atom feed
+    _util.py               Shared HTML/domain cleanup helpers
 
   filters/
     hard.py             Stage 0: dedup, min score, blacklist
@@ -33,8 +36,55 @@ from.
 
 **Everything downstream is source-agnostic.** Filtering and ranking
 operate purely on `RawItem`/`ScoredItem`, never on source-specific fields.
-Adding a second source (RSS, Reddit, ...) means writing one new file and
-adding one line to `pipeline._fetch_all`.
+Adding a source means writing one new file and registering a factory for
+it in `pipeline.SOURCE_FACTORIES`.
+
+**One `NewsSource` instance per target, not per source type.** `arxiv`
+and `reddit` each watch a list of targets (categories, subreddits) --
+rather than one instance internally looping over that list, each target
+gets its own instance (`name = "arxiv:cs.CL"`, `"reddit:MachineLearning"`)
+via that source's factory. This gives each target its own raw-cache file,
+log lines, and shortlist-floor/max-per-source accounting for free, so a
+single struggling subreddit or category is visible and containable rather
+than merged into one opaque "reddit" bucket. Per-entry `sources: [...]`
+scoping and `SourceSettings.min_points` match either the full instance
+name or the bare type prefix (`config.source_matches`), so
+`sources: ["reddit"]` covers every subreddit and
+`sources: ["reddit:MachineLearning"]` targets just one.
+
+**A profile can enable/disable sources and scope interests to a source.**
+`InterestProfile.sources` (a `dict[str, SourceSettings]`) turns whole
+sources on/off per profile -- e.g. a non-technical reader's profile can
+disable `hackernews` outright, rather than trying to anti-interest their
+way out of an entire source. Separately, any `InterestEntry` (interest or
+anti-interest) can carry a `sources: [...]` list to restrict it to
+specific sources -- e.g. a narrow research-direction interest that's only
+meaningful on `arxiv`, or an anti-interest like "drama, flame-bait" that
+only applies to `hackernews`. An entry with no `sources` applies
+everywhere. See `config/interests.yaml` for examples of both.
+
+**Cross-source ranking guards against one source dominating.** Two
+separate mechanisms, for two separate failure modes:
+- Stage 2's shortlist selection (`llm_rerank._select_shortlist`)
+  guarantees each source a minimum number of slots before filling the
+  rest by embedding score -- otherwise a source whose titles happen to
+  score higher on stage 1 (for phrasing/style reasons, not true
+  relevance) could crowd every other source out of the LLM stage
+  entirely, since stage 1 sorts the pooled candidate list globally.
+- The final top-N selection (`pipeline.run_pipeline`) caps how many
+  slots any one source can take (`max_per_source`), so even a source the
+  LLM genuinely rates higher can't fill the whole digest.
+Per-source candidate/shortlist/output counts are logged at each stage
+(and raw counts persisted in `RunMetadata.source_candidate_counts`) to
+make this visible rather than assumed.
+
+**Sources without a real score/vote concept don't get penalized for it.**
+`NewsSource.has_score` (False for `arxiv`/`reddit`, True for `hackernews`)
+tells `pipeline._resolve_min_points` to skip the min-points floor for that
+source entirely, rather than dropping every item because arXiv papers and
+Reddit's RSS feed both report `points=0` unconditionally (no vote data is
+exposed in either feed). A profile can still force a specific floor via
+`sources.<type>.min_points`, which always wins over the has_score default.
 
 **Cheap-to-expensive funnel.** Stage 0 (hard filters) and stage 1
 (embeddings) are cheap enough to run over every candidate. Stage 2 (local
@@ -67,9 +117,25 @@ here so they're easy to revisit rather than silently forgotten:
 - **Cache freshness isn't validated beyond "file exists for today".** If
   you run twice in one day expecting new stories, use `--force-fetch`;
   there's no automatic staleness check.
-- **Single source.** Only HackerNews is implemented. The `NewsSource`
-  protocol exists specifically so more can be added without touching
-  filtering/ranking/storage.
+- **arxiv has day, not hour, granularity.** arXiv's per-category RSS feed
+  gives every paper announced on a given day the same `pubDate` (midnight
+  US/Eastern) -- there's no finer timestamp to fetch. Fine for a ~30h
+  window, but don't expect within-day ordering or precision from it.
+- **reddit has no reliable external link, and RSS is unauthenticated and
+  tightly rate-limited.** Reddit's Atom feed only exposes the comments
+  permalink, not a link post's actual target URL, so `url`/`domain` are
+  always the reddit.com permalink -- domain-based blacklisting won't see
+  a link post's real domain. The feed is also unauthenticated (Reddit's
+  API requires manual approval since Nov 2025) and was observed emptying
+  its per-minute rate budget after a single request in testing, hence the
+  generous `REQUEST_DELAY_SECONDS` and treating a 429 as "skip this
+  subreddit this run" rather than a hard failure.
+- **`max_per_source` bites immediately once >1 source is enabled.** With
+  only `hackernews` on, the cap never triggers (nothing to compete with).
+  Turning on `arxiv`/`reddit` in `config/interests.yaml` makes it active
+  for real -- worth a quick sanity check on the first run after enabling
+  a new source that the top-N mix looks like what you'd expect, per
+  `--max-per-source` and the per-source stage logs.
 
 ## Gotcha: reasoning models and `think=False`
 

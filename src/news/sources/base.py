@@ -16,4 +16,11 @@ from news.models import RawItem
 class NewsSource(Protocol):
     name: str
 
+    has_score: bool
+    """Whether `RawItem.points` carries a real vote/score signal for this
+    source. False for sources with no such concept (e.g. RSS-only feeds
+    like arxiv/reddit here) -- hard filtering skips the min-points floor
+    for those rather than dropping everything, since every item would
+    otherwise have points=0."""
+
     def fetch(self, window_start: datetime, window_end: datetime) -> list[RawItem]: ...

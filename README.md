@@ -9,8 +9,9 @@ interest profile, and outputs a short daily digest. Runs entirely on-device
 Three-stage funnel, cheap to expensive, so the costly stages only ever see
 a handful of candidates:
 
-1. **Fetch** -- pull recent items from each configured source (currently
-   just HackerNews, via the [Algolia HN Search API](https://hn.algolia.com/api)).
+1. **Fetch** -- pull recent items from each source enabled in your profile:
+   HackerNews (via the [Algolia HN Search API](https://hn.algolia.com/api)),
+   arXiv (per-category RSS digest), and Reddit (per-subreddit Atom feed).
 2. **Hard filter** (stage 0) -- drop duplicates, low-score items, and exact
    blacklist term/domain matches. No ML.
 3. **Embedding rank** (stage 1) -- score every surviving candidate by
@@ -61,9 +62,11 @@ Logs: concise progress to the console, full detail to `logs/news_<date>.log`
 ## Extending
 
 - **New source**: implement `NewsSource.fetch(window_start, window_end) ->
-  list[RawItem]` (see `src/news/sources/hackernews.py`) and wire it into
-  `pipeline._fetch_all`. Everything downstream (filtering, ranking,
-  storage) is source-agnostic.
+  list[RawItem]` (see `src/news/sources/hackernews.py`, `arxiv.py`,
+  `reddit.py`) and register a factory for it in `pipeline.SOURCE_FACTORIES`.
+  Everything downstream (filtering, ranking, storage) is source-agnostic --
+  see `docs/architecture.md` for the per-target-instance and
+  `has_score`/`min_points` conventions new sources should follow.
 - **New pipeline stage**: stages operate on lists of `ScoredItem` and are
   composed in `pipeline.run_pipeline` -- add a module under `src/news/rank/`
   or `src/news/filters/` and call it there.

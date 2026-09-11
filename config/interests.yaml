@@ -6,6 +6,13 @@
 #   phrasing/context matters more than exact wording.
 # - `weight` scales how much an interest counts (1.0 = normal). Use it to
 #   nudge some topics above others without excluding anything.
+# - `sources` (optional, on any interest/anti-interest entry) restricts it
+#   to specific source names, e.g. `sources: [arxiv]`. Omit it (the
+#   default) and the entry applies to every source. Use this to be more
+#   particular on a source with dense, precise content (e.g. only want
+#   narrow subfields from arxiv) while casting a wider net elsewhere, or to
+#   scope an anti-interest that's only meaningful on one source (e.g.
+#   "drama, flame-bait" doesn't really occur on arxiv).
 # - `anti_interests` is a soft counterweight, not a filter: same format as
 #   `interests`, but its weighted-max similarity is *subtracted* from the
 #   embedding score, and it's also shown to the local LLM reranker as
@@ -16,6 +23,12 @@
 # - `blacklist` is a hard, stage-0 filter: exact/substring matches on
 #   story title or domain are dropped before any scoring happens. Use it
 #   for topics or sources you never want to see, not for "less interested".
+# - `sources` at the top level (not to be confused with the per-entry
+#   `sources` field above) enables/disables whole sources for this
+#   profile. A source not listed here defaults to enabled. Use this to
+#   skip a source entirely for a given person/profile (e.g. someone with
+#   no interest in tech skipping `hackernews`), rather than trying to
+#   anti-interest your way out of an entire source.
 interests:
   - text: "language acquisition, language learning, second language, language immersion, comprehensible input, applied linguistics"
     weight: 1.0
@@ -23,6 +36,12 @@ interests:
     weight: 1.0
   - text: "urban ecology, foraging, birdwatching"
     weight: 0.6
+  # EXAMPLE of a source-scoped interest -- narrower than the general
+  # language-acquisition interest above, and only meaningful as a paper
+  # topic. Inert until you also enable `arxiv` below (with categories).
+  - text: "interlanguage transfer effects, critical period hypothesis, second-language attrition, computational models of language acquisition"
+    weight: 1.3
+    sources: ["arxiv"]
 
 # EXAMPLE anti-interests -- replace with your own before running for real.
 anti_interests:
@@ -30,6 +49,8 @@ anti_interests:
     weight: 0.8
   - text: "theory of artifical intelligence, LLM paper, machine learning paper, theoretical computer science, AI model comparison, Silicon Valley drama"
     weight: 0.4
+  - text: "Large Language Model"
+    weight: 0.7
   - text: "education politics, elementary school education"
     weight: 0.3
   - text: "US politics"
@@ -38,6 +59,10 @@ anti_interests:
     weight: 0.9
   - text: "drama, flame-bait"
     weight: 0.6
+    sources: ["hackernews"]
+  - text: "generic monthly question threads with no novel insights"
+    weight: 1
+    sources: ["reddit"]
 
 blacklist:
   terms:
@@ -45,3 +70,32 @@ blacklist:
     - "celebrity"
   domains:
     - "example-spam-domain.com"
+
+# Sources enabled for this profile. A source not listed here defaults to
+# enabled, so `hackernews` doesn't strictly need a line -- it's here for
+# clarity, and as the place a non-technical profile would set
+# `enabled: false` to skip it entirely.
+#
+# arxiv and reddit are implemented but disabled by default below, since
+# they each need you to pick real targets first (there's no sane default
+# category/subreddit list to guess on your behalf). To turn one on:
+# flip `enabled: true` and fill in `categories`/`subreddits`.
+#
+# `min_points` (optional, any source) overrides the pipeline's default
+# min-points floor (`--min-points`, default 1) for just this source.
+# Doesn't matter for arxiv/reddit -- they have no native score/vote
+# concept, so hard filtering already skips the floor for them.
+sources:
+  hackernews:
+    enabled: true
+
+  arxiv:
+    enabled: true
+    # arXiv category codes, e.g. "cs.CL" (Computation and Language),
+    # "cs.AI", "cs.LG". Full taxonomy: https://arxiv.org/category_taxonomy
+    categories: ["cs.CL"]
+
+  reddit:
+    enabled: true
+    # Subreddit names, no "r/" prefix.
+    subreddits: ["languagelearning", "internetisbeautiful"]

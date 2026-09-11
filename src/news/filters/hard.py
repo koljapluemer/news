@@ -13,8 +13,13 @@ from news.models import RawItem
 
 
 def apply_hard_filters(
-    items: list[RawItem], profile: InterestProfile, min_points: int = 1
+    items: list[RawItem], profile: InterestProfile, min_points: dict[str, int]
 ) -> list[RawItem]:
+    """`min_points` is per-source (keyed by `RawItem.source`, e.g.
+    "hackernews" or "reddit:MachineLearning") -- sources with no native
+    vote/score concept should be resolved to 0 by the caller (see
+    `pipeline._resolve_min_points`), since every item there has
+    points=0 and a nonzero floor would silently drop everything."""
     seen_ids: set[str] = set()
     blacklist_terms = [t.lower() for t in profile.blacklist.terms]
     blacklist_domains = {d.lower() for d in profile.blacklist.domains}
@@ -25,7 +30,7 @@ def apply_hard_filters(
             continue
         seen_ids.add(item.id)
 
-        if item.points < min_points:
+        if item.points < min_points.get(item.source, 0):
             continue
 
         if item.domain and item.domain.lower() in blacklist_domains:

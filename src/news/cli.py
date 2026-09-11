@@ -9,7 +9,7 @@ import typer
 from news.logging_setup import configure_logging, logger
 from news.pipeline import PipelineConfig, run_pipeline
 from news.rank.embed import EMBEDDING_MODEL_NAME
-from news.rank.llm_rerank import DEFAULT_MODEL_NAME
+from news.rank.llm_rerank import DEFAULT_MIN_SHORTLIST_PER_SOURCE, DEFAULT_MODEL_NAME
 
 app = typer.Typer(add_completion=False)
 
@@ -21,7 +21,12 @@ def main(
     hours: float = typer.Option(30.0, help="How far back to fetch stories from."),
     top: int = typer.Option(10, help="Number of ranked items to output."),
     shortlist: int = typer.Option(40, help="Candidates passed to the LLM reranker."),
-    min_points: int = typer.Option(1, help="Minimum HN points to keep a story."),
+    min_shortlist_per_source: int = typer.Option(
+        DEFAULT_MIN_SHORTLIST_PER_SOURCE,
+        help="Guaranteed LLM-shortlist slots per source, before filling the rest by embedding score.",
+    ),
+    max_per_source: int = typer.Option(4, help="Max final output items from any one source."),
+    min_points: int = typer.Option(1, help="Minimum points to keep a story."),
     interests: Path = typer.Option(
         REPO_ROOT / "config" / "interests.yaml", help="Path to the interest profile YAML."
     ),
@@ -30,11 +35,12 @@ def main(
     llm_model: str = typer.Option(DEFAULT_MODEL_NAME, help="Ollama model for stage-2 reranking."),
     embedding_model: str = typer.Option(EMBEDDING_MODEL_NAME, help="sentence-transformers model for stage-1 scoring."),
     force_fetch: bool = typer.Option(
-        False, help="Refetch from HN even if today's raw data is already cached."
+        False, help="Refetch even if today's raw data is already cached for a source."
     ),
 ) -> None:
-    """Fetch recent HackerNews stories, rank them against your interests, and
-    write the top N to data/runs/<run_id>/top10.json (and data/latest.json)."""
+    """Fetch recent items from every source enabled in your interest profile,
+    rank them against your interests, and write the top N to
+    data/runs/<run_id>/top10.json (and data/latest.json)."""
     configure_logging(log_dir)
 
     cfg = PipelineConfig(
@@ -43,7 +49,9 @@ def main(
         window_hours=hours,
         min_points=min_points,
         shortlist_size=shortlist,
+        min_shortlist_per_source=min_shortlist_per_source,
         top_n=top,
+        max_per_source=max_per_source,
         embedding_model_name=embedding_model,
         llm_model_name=llm_model,
         force_fetch=force_fetch,

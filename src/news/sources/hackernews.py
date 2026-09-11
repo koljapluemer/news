@@ -19,17 +19,15 @@ the cap by making each individual query small enough to fit in one page.
 
 from __future__ import annotations
 
-import html
-import re
 import time
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlparse
 
 import httpx
 from tqdm import tqdm
 
 from news.logging_setup import logger
 from news.models import RawItem
+from news.sources._util import clean_html, domain_of
 
 ALGOLIA_SEARCH_URL = "https://hn.algolia.com/api/v1/search_by_date"
 HITS_PER_PAGE = 1000
@@ -37,25 +35,10 @@ REQUEST_DELAY_SECONDS = 0.1
 MAX_SPLIT_DEPTH = 8
 MIN_SPLIT_INTERVAL = timedelta(minutes=1)
 
-_TAG_RE = re.compile(r"<[^>]+>")
-
-
-def _clean_html(text: str | None) -> str | None:
-    if not text:
-        return None
-    stripped = _TAG_RE.sub(" ", text)
-    return html.unescape(stripped).strip() or None
-
-
-def _domain_of(url: str | None) -> str | None:
-    if not url:
-        return None
-    netloc = urlparse(url).netloc
-    return netloc.removeprefix("www.") or None
-
 
 class HackerNewsSource:
     name = "hackernews"
+    has_score = True
 
     def __init__(self, client: httpx.Client | None = None) -> None:
         self._client = client or httpx.Client(timeout=30.0)
@@ -135,8 +118,8 @@ class HackerNewsSource:
             source="hackernews",
             title=title,
             url=url,
-            domain=_domain_of(url),
-            text=_clean_html(hit.get("story_text")),
+            domain=domain_of(url),
+            text=clean_html(hit.get("story_text")),
             author=hit.get("author"),
             points=hit.get("points") or 0,
             num_comments=hit.get("num_comments") or 0,

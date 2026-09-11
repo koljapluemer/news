@@ -8,6 +8,13 @@ I meant", etc.) plus a one-line reason that doubles as a display blurb.
 Final ranking is driven by the LLM score; embedding score is only a
 tiebreaker. Items outside the shortlist keep llm_score=None and are not
 eligible for the final top-N, but remain in scored.jsonl for later eval.
+
+The shortlist itself guarantees each source at least `min_per_source`
+slots (subject to the overall `shortlist_size` budget) before filling the
+rest by embedding score. Without this, a source whose titles happen to
+score higher on average -- for style/phrasing reasons having nothing to do
+with true relevance -- can crowd every other source out of this stage
+entirely, since stage 1 sorts and cuts the pooled candidate list globally.
 """
 
 from __future__ import annotations
@@ -24,6 +31,7 @@ from news.models import ScoredItem
 
 DEFAULT_MODEL_NAME = "qwen3.5:9b"
 MAX_RETRIES = 2
+DEFAULT_MIN_SHORTLIST_PER_SOURCE = 5
 
 
 class _Judgement(BaseModel):
@@ -32,10 +40,13 @@ class _Judgement(BaseModel):
 
 
 def _build_prompt(profile: InterestProfile, item: ScoredItem) -> str:
-    interests_block = "\n".join(f"- {i.text}" for i in profile.interests)
+    interests = profile.interests_for_source(item.source)
+    anti_interests = profile.anti_interests_for_source(item.source)
+
+    interests_block = "\n".join(f"- {i.text}" for i in interests)
     anti_section = ""
-    if profile.anti_interests:
-        anti_block = "\n".join(f"- {i.text}" for i in profile.anti_interests)
+    if anti_interests:
+        anti_block = "\n".join(f"- {i.text}" for i in anti_interests)
         anti_section = (
             "\n\nTopics the reader is less interested in (not a hard "
             "exclude -- weigh these down, but a story can still score well "
@@ -44,7 +55,7 @@ def _build_prompt(profile: InterestProfile, item: ScoredItem) -> str:
         )
     text_snippet = f'\nSelf-text: "{item.text[:500]}"' if item.text else ""
     return (
-        "You are rating how relevant a HackerNews story is to a reader's "
+        f"You are rating how relevant a {item.source} post is to a reader's "
         "personal interests.\n\n"
         f"Reader's interests:\n{interests_block}"
         f"{anti_section}\n\n"
@@ -57,6 +68,41 @@ def _build_prompt(profile: InterestProfile, item: ScoredItem) -> str:
         'Respond with ONLY a JSON object: {"score": <1-10 int>, "reason": '
         '"<one short sentence explaining the score>"}'
     )
+
+
+def _select_shortlist(
+    items: list[ScoredItem], shortlist_size: int, min_per_source: int
+) -> list[ScoredItem]:
+    """Take the top `shortlist_size` items by embedding score, but first
+    guarantee each source up to `min_per_source` slots so a source with a
+    systematically higher (or just more numerous) score distribution can't
+    crowd the others out of stage 2 entirely. `items` is assumed sorted by
+    embedding_score descending (embed.py already does this)."""
+    if len(items) <= shortlist_size:
+        return list(items)
+
+    by_source: dict[str, list[ScoredItem]] = {}
+    for item in items:
+        by_source.setdefault(item.source, []).append(item)
+
+    selected: list[ScoredItem] = []
+    selected_ids: set[str] = set()
+    for source in sorted(by_source):
+        for item in by_source[source][:min_per_source]:
+            if len(selected) >= shortlist_size:
+                break
+            selected.append(item)
+            selected_ids.add(item.id)
+
+    for item in items:
+        if len(selected) >= shortlist_size:
+            break
+        if item.id not in selected_ids:
+            selected.append(item)
+            selected_ids.add(item.id)
+
+    selected.sort(key=lambda s: s.embedding_score, reverse=True)
+    return selected
 
 
 def _ensure_model_available(model_name: str) -> None:
@@ -110,14 +156,19 @@ class LLMReranker:
         return None
 
     def rerank(
-        self, items: list[ScoredItem], profile: InterestProfile, shortlist_size: int
+        self,
+        items: list[ScoredItem],
+        profile: InterestProfile,
+        shortlist_size: int,
+        min_shortlist_per_source: int = DEFAULT_MIN_SHORTLIST_PER_SOURCE,
     ) -> list[ScoredItem]:
-        shortlist = items[:shortlist_size]
+        shortlist = _select_shortlist(items, shortlist_size, min_shortlist_per_source)
         logger.info(
-            "Stage 2 (LLM rerank): judging top {} of {} candidates with {}",
+            "Stage 2 (LLM rerank): judging top {} of {} candidates with {} (min {}/source)",
             len(shortlist),
             len(items),
             self.model_name,
+            min_shortlist_per_source,
         )
 
         for item in tqdm(shortlist, desc="LLM reranking", unit="story"):

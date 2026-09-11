@@ -12,6 +12,11 @@ counterweight, not a filter -- a story can still surface if it matches a
 real interest strongly enough to outweigh the penalty. Use `blacklist` in
 `interests.yaml` for topics that should never appear at all.
 
+Interest/anti-interest entries may be scoped to specific sources (see
+`InterestEntry.sources`). Every entry is embedded once regardless -- the
+per-item weighted-max only considers the subset of entries applicable to
+that item's source, so scoping costs no extra encoding work.
+
 Uses BAAI/bge-base-en-v1.5, which distinguishes "query" (the interest,
 what we're searching for) from "passage" (the story title) -- only the
 query side gets the retrieval instruction prefix.
@@ -19,7 +24,7 @@ query side gets the retrieval instruction prefix.
 
 from __future__ import annotations
 
-from news.config import InterestProfile
+from news.config import InterestProfile, source_matches
 from news.logging_setup import logger
 from news.models import RawItem, ScoredItem
 
@@ -55,7 +60,7 @@ class EmbeddingRanker:
             len(anti_texts),
             len(items),
         )
-        interest_vecs = self.model.encode(interest_texts, normalize_embeddings=True)
+        interest_vecs = self.model.encode(interest_texts, normalize_embeddings=True) if interest_texts else None
         anti_vecs = self.model.encode(anti_texts, normalize_embeddings=True) if anti_texts else None
         title_vecs = self.model.encode(
             [item.title for item in items],
@@ -63,33 +68,17 @@ class EmbeddingRanker:
             show_progress_bar=True,
         )
 
-        sims = cos_sim(title_vecs, interest_vecs)  # [n_items, n_interests]
+        sims = cos_sim(title_vecs, interest_vecs) if interest_vecs is not None else None  # [n_items, n_interests]
         anti_sims = cos_sim(title_vecs, anti_vecs) if anti_vecs is not None else None  # [n_items, n_anti]
 
         scored: list[ScoredItem] = []
-        for idx, (item, item_sims) in enumerate(zip(items, sims)):
-            weighted = [
-                float(sim) * weight for sim, weight in zip(item_sims, interest_weights)
-            ]
-            best_idx = max(range(len(weighted)), key=lambda i: weighted[i]) if weighted else None
-            pos_score = weighted[best_idx] if best_idx is not None else 0.0
-            matches = {
-                profile.interests[i].text: round(float(item_sims[i]), 4)
-                for i in range(len(profile.interests))
-            }
-
-            anti_score = 0.0
-            anti_matches: dict[str, float] = {}
-            if anti_sims is not None:
-                item_anti_sims = anti_sims[idx]
-                anti_weighted = [
-                    float(sim) * weight for sim, weight in zip(item_anti_sims, anti_weights)
-                ]
-                anti_score = max(anti_weighted) if anti_weighted else 0.0
-                anti_matches = {
-                    profile.anti_interests[i].text: round(float(item_anti_sims[i]), 4)
-                    for i in range(len(profile.anti_interests))
-                }
+        for idx, item in enumerate(items):
+            pos_score, matches = _weighted_max(
+                sims[idx] if sims is not None else None, profile.interests, interest_weights, item.source
+            )
+            anti_score, anti_matches = _weighted_max(
+                anti_sims[idx] if anti_sims is not None else None, profile.anti_interests, anti_weights, item.source
+            )
 
             scored.append(
                 ScoredItem(
@@ -104,3 +93,23 @@ class EmbeddingRanker:
         scored.sort(key=lambda s: s.embedding_score, reverse=True)
         logger.info("Stage 1 (embedding) scoring complete")
         return scored
+
+
+def _weighted_max(
+    item_sims,  # 1D tensor of cosine similarities, one per entry, or None
+    entries,
+    weights: list[float],
+    source: str,
+) -> tuple[float, dict[str, float]]:
+    """Weighted-max similarity over the entries applicable to `source`,
+    plus the raw per-entry similarities (for debugging/display)."""
+    if item_sims is None:
+        return 0.0, {}
+
+    applicable = [i for i, entry in enumerate(entries) if source_matches(source, entry.sources)]
+    if not applicable:
+        return 0.0, {}
+
+    best_score = max(float(item_sims[i]) * weights[i] for i in applicable)
+    matches = {entries[i].text: round(float(item_sims[i]), 4) for i in applicable}
+    return best_score, matches
