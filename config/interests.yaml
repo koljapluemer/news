@@ -1,0 +1,25 @@
+# Personal interest profile used by the ranking pipeline.
+#
+# - Write each interest as a natural-language sentence, the way you'd
+#   describe the topic to a person -- not as a bag of keywords. These
+#   sentences are embedded and compared against each story's title, so
+#   phrasing/context matters more than exact wording.
+# - `weight` scales how much an interest counts (1.0 = normal). Use it to
+#   nudge some topics above others without excluding anything.
+# - `blacklist` is a hard, stage-0 filter: exact/substring matches on
+#   story title or domain are dropped before any scoring happens. Use it
+#   for topics or sources you never want to see, not for "less interested".
+interests:
+  - text: "language acquisition, language learning, second language, language immersion, comprehensible input, applied linguistics"
+    weight: 1.0
+  - text: "educational software, digital education, intelligent tutoring system, flashcards, spaced repetition, adaptive learning"
+    weight: 1.0
+  - text: "urban ecology, foraging, birdwatching"
+    weight: 0.6
+
+blacklist:
+  terms:
+    - "cryptocurrency price"
+    - "celebrity"
+  domains:
+    - "example-spam-domain.com"

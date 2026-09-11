@@ -1,0 +1,62 @@
+"""CLI entry point: `uv run news [OPTIONS]`."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import typer
+
+from news.logging_setup import configure_logging, logger
+from news.pipeline import PipelineConfig, run_pipeline
+from news.rank.embed import EMBEDDING_MODEL_NAME
+from news.rank.llm_rerank import DEFAULT_MODEL_NAME
+
+app = typer.Typer(add_completion=False)
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+@app.command()
+def main(
+    hours: float = typer.Option(30.0, help="How far back to fetch stories from."),
+    top: int = typer.Option(10, help="Number of ranked items to output."),
+    shortlist: int = typer.Option(40, help="Candidates passed to the LLM reranker."),
+    min_points: int = typer.Option(1, help="Minimum HN points to keep a story."),
+    interests: Path = typer.Option(
+        REPO_ROOT / "config" / "interests.yaml", help="Path to the interest profile YAML."
+    ),
+    data_dir: Path = typer.Option(REPO_ROOT / "data", help="Where raw/run data is stored."),
+    log_dir: Path = typer.Option(REPO_ROOT / "logs", help="Where log files are written."),
+    llm_model: str = typer.Option(DEFAULT_MODEL_NAME, help="Ollama model for stage-2 reranking."),
+    embedding_model: str = typer.Option(EMBEDDING_MODEL_NAME, help="sentence-transformers model for stage-1 scoring."),
+    force_fetch: bool = typer.Option(
+        False, help="Refetch from HN even if today's raw data is already cached."
+    ),
+) -> None:
+    """Fetch recent HackerNews stories, rank them against your interests, and
+    write the top N to data/runs/<run_id>/top10.json (and data/latest.json)."""
+    configure_logging(log_dir)
+
+    cfg = PipelineConfig(
+        data_dir=data_dir,
+        interests_path=interests,
+        window_hours=hours,
+        min_points=min_points,
+        shortlist_size=shortlist,
+        top_n=top,
+        embedding_model_name=embedding_model,
+        llm_model_name=llm_model,
+        force_fetch=force_fetch,
+    )
+
+    try:
+        out_path = run_pipeline(cfg)
+    except Exception:
+        logger.exception("Pipeline run failed")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"\nDone. Top items written to {out_path}")
+
+
+if __name__ == "__main__":
+    app()
