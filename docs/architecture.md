@@ -121,15 +121,25 @@ here so they're easy to revisit rather than silently forgotten:
   gives every paper announced on a given day the same `pubDate` (midnight
   US/Eastern) -- there's no finer timestamp to fetch. Fine for a ~30h
   window, but don't expect within-day ordering or precision from it.
-- **reddit has no reliable external link, and RSS is unauthenticated and
-  tightly rate-limited.** Reddit's Atom feed only exposes the comments
-  permalink, not a link post's actual target URL, so `url`/`domain` are
-  always the reddit.com permalink -- domain-based blacklisting won't see
-  a link post's real domain. The feed is also unauthenticated (Reddit's
-  API requires manual approval since Nov 2025) and was observed emptying
-  its per-minute rate budget after a single request in testing, hence the
-  generous `REQUEST_DELAY_SECONDS` and treating a 429 as "skip this
-  subreddit this run" rather than a hard failure.
+- **reddit has no reliable external link, and RSS is unauthenticated.**
+  Reddit's Atom feed only exposes the comments permalink, not a link
+  post's actual target URL, so `url`/`domain` are always the reddit.com
+  permalink -- domain-based blacklisting won't see a link post's real
+  domain. The feed is also unauthenticated (Reddit's API requires manual
+  approval since Nov 2025).
+- **All configured subreddits are fetched as one combined request.**
+  Reddit tightened unauthenticated RSS to ~1 request/minute per IP in
+  mid-2026 (down from ~100/10min), so N subreddits as N sequential
+  requests reliably 429s past N=1. `RedditBatch` (`sources/reddit.py`)
+  fetches every subreddit in the profile via one multireddit URL
+  (`r/sub1+sub2+.../new.rss`) and splits the result by each entry's own
+  `<category>`, so `RedditSource` -- and everything downstream: caching,
+  logging, the shortlist floor, interest scoping -- still operates
+  per-subreddit exactly as if each had its own request. The real
+  trade-off: `FEED_LIMIT` (100) is a budget shared across the whole
+  batch, not per subreddit, so a very active subreddit can crowd quieter
+  ones out of a given fetch -- watch for a configured subreddit
+  unexpectedly returning 0 items while others return plenty.
 - **`max_per_source` bites immediately once >1 source is enabled.** With
   only `hackernews` on, the cap never triggers (nothing to compete with).
   Turning on `arxiv`/`reddit` in `config/interests.yaml` makes it active

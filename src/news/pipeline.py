@@ -27,7 +27,7 @@ from news.rank.llm_rerank import DEFAULT_MIN_SHORTLIST_PER_SOURCE, DEFAULT_MODEL
 from news.sources.arxiv import ArxivSource
 from news.sources.base import NewsSource
 from news.sources.hackernews import HackerNewsSource
-from news.sources.reddit import RedditSource
+from news.sources.reddit import RedditBatch, RedditSource
 from news import storage
 
 
@@ -52,7 +52,10 @@ def _reddit_factory(settings: SourceSettings | None) -> list[NewsSource]:
     if not subreddits:
         logger.warning("reddit enabled but `sources.reddit.subreddits` is empty in the profile; skipping")
         return []
-    return [RedditSource(subreddit=s) for s in subreddits]
+    # All subreddits share one RedditBatch, so they cost one combined HTTP
+    # request instead of one per subreddit -- see sources/reddit.py.
+    batch = RedditBatch(subreddits)
+    return [RedditSource(subreddit=s, batch=batch) for s in subreddits]
 
 
 SOURCE_FACTORIES: dict[str, Callable[[SourceSettings | None], list[NewsSource]]] = {

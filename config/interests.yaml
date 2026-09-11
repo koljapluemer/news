@@ -62,7 +62,7 @@ anti_interests:
     sources: ["hackernews"]
   - text: "generic monthly question threads with no novel insights"
     weight: 1
-    sources: ["reddit"]
+    sources: ["reddit:languagelearning"]
 
 blacklist:
   terms:
