@@ -130,9 +130,14 @@ def upsert_feed(data_dir: Path, items: list[ScoredItem], surfaced_at: datetime) 
     once the whole thing is re-sorted by `surfaced_at` descending.
 
     Written via temp file + rename so a reader (the Flutter app) polling
-    the file never sees a half-written line."""
+    the file never sees a half-written line.
+
+    `checked_off`/`thumbs_down` are set by the Flutter app, never by a
+    pipeline run -- an item re-surfacing here carries its existing flags
+    forward rather than resetting them."""
     entries = load_feed(data_dir)
     for item in items:
+        existing = entries.get(item.id)
         entries[item.id] = FeedEntry(
             id=item.id,
             source=item.source,
@@ -145,6 +150,8 @@ def upsert_feed(data_dir: Path, items: list[ScoredItem], surfaced_at: datetime) 
             created_at=item.created_at,
             final_score=item.final_score,
             surfaced_at=surfaced_at,
+            checked_off=existing.checked_off if existing else False,
+            thumbs_down=existing.thumbs_down if existing else False,
         )
 
     ordered = sorted(entries.values(), key=lambda e: e.surfaced_at, reverse=True)

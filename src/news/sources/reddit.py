@@ -155,8 +155,17 @@ class RedditBatch:
             )
 
         by_subreddit = dict(empty)
+        canonical_by_lower = {s.lower(): s for s in self.subreddits}
         for item in in_window:
-            by_subreddit[item.source.removeprefix("reddit:")].append(item)
+            fetched_subreddit = item.source.removeprefix("reddit:")
+            canonical = canonical_by_lower.get(fetched_subreddit.lower())
+            if canonical is None:
+                logger.warning(
+                    "Combined reddit feed returned unexpected subreddit {!r}; skipping it",
+                    fetched_subreddit,
+                )
+                continue
+            by_subreddit[canonical].append(item)
 
         for subreddit, subreddit_items in by_subreddit.items():
             logger.info("Fetched {} r/{} posts in window (combined batch)", len(subreddit_items), subreddit)

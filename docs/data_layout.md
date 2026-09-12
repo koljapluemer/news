@@ -45,7 +45,9 @@ first):
   "num_comments": 89,
   "created_at": "2026-09-11T09:00:00Z",
   "final_score": 9.71,
-  "surfaced_at": "2026-09-11T14:30:05Z"
+  "surfaced_at": "2026-09-11T14:30:05Z",
+  "checked_off": false,
+  "thumbs_down": false
 }
 ```
 
@@ -54,6 +56,14 @@ place (fresh score, `surfaced_at` bumped to that run) rather than
 duplicated. Nothing is ever deleted from it -- an item that stops
 reappearing just sinks toward the bottom once the file is re-sorted by
 `surfaced_at`. See `storage.upsert_feed`.
+
+`checked_off` and `thumbs_down` are written by the Flutter app, not by a
+pipeline run: it patches the item's line in place when the user dismisses a
+card (`checked_off`) or dislikes it (`thumbs_down`, which also implies
+`checked_off` -- both hide it from the feed view). A pipeline run preserves
+whatever value it finds when an item re-surfaces rather than resetting it.
+`thumbs_down` is otherwise unused by the pipeline today; it's recorded for a
+future ranking stage to treat as a negative signal.
 
 ## Why raw and runs are separate
 

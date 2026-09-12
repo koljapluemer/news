@@ -98,4 +98,4 @@ sources:
   reddit:
     enabled: true
     # Subreddit names, no "r/" prefix.
-    subreddits: ["languagelearning", "internetisbeautiful"]
+    subreddits: ["languagelearning", "internetisbeautiful", "sideproject"]

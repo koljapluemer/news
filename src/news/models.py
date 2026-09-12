@@ -98,3 +98,12 @@ class FeedEntry(BaseModel):
     final_score: float | None = None
     surfaced_at: datetime
     """When a pipeline run last included this item in its top-N output."""
+
+    checked_off: bool = False
+    """Set by the Flutter app when the user dismisses the item; hidden from
+    the feed view once true. Preserved across re-surfacing by `upsert_feed`."""
+    thumbs_down: bool = False
+    """Like `checked_off` (also hides the item), but records that the user
+    actively disliked it rather than just having seen it -- a future
+    pipeline stage can use this as a negative signal. Preserved across
+    re-surfacing by `upsert_feed`."""
