@@ -1,0 +1,24 @@
+name: news_feed
+description: "minimal personal news feed reader."
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  permission_handler: ^12.0.3
+  file_picker: ^10.3.10
+  shared_preferences: ^2.5.5
+  path: ^1.9.1
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

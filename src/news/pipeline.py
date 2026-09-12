@@ -221,6 +221,7 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
     output = RunOutput(meta=meta, items=top)
     out_path = storage.save_run_output(run_dir, output)
     storage.save_latest_pointer(cfg.data_dir, output)
+    storage.upsert_feed(cfg.data_dir, top, surfaced_at=window_end)
 
     logger.info("Run complete: {} top items written to {}", len(top), out_path)
     return out_path

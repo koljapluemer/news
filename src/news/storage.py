@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from news.logging_setup import logger
-from news.models import RawItem, RunOutput, ScoredItem
+from news.models import FeedEntry, RawItem, RunOutput, ScoredItem
 
 
 def raw_dir(data_dir: Path, source: str, day: str) -> Path:
@@ -99,3 +99,63 @@ def save_latest_pointer(data_dir: Path, output: RunOutput) -> Path:
     latest_path = data_dir / "latest.json"
     latest_path.write_text(output.model_dump_json(indent=2), encoding="utf-8")
     return latest_path
+
+
+def feed_path(data_dir: Path) -> Path:
+    return data_dir / "feed.jsonl"
+
+
+def load_feed(data_dir: Path) -> dict[str, FeedEntry]:
+    """Loads the persistent feed, keyed by item id. Missing file (first
+    run) or a line that fails to parse -- treated as "not there yet" rather
+    than fatal, same policy as `load_cached_raw`."""
+    path = feed_path(data_dir)
+    if not path.exists():
+        return {}
+    entries: dict[str, FeedEntry] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        entry = FeedEntry.model_validate_json(line)
+        entries[entry.id] = entry
+    return entries
+
+
+def upsert_feed(data_dir: Path, items: list[ScoredItem], surfaced_at: datetime) -> Path:
+    """Merges this run's top-N items into the persistent, ever-growing
+    `feed.jsonl`, keyed by item id. An item already in the feed (e.g. still
+    ranking in today's top 10) has its data refreshed and `surfaced_at`
+    bumped to `surfaced_at` -- nothing is ever pruned, so the file only
+    grows; an item that stops reappearing just sinks toward the bottom
+    once the whole thing is re-sorted by `surfaced_at` descending.
+
+    Written via temp file + rename so a reader (the Flutter app) polling
+    the file never sees a half-written line."""
+    entries = load_feed(data_dir)
+    for item in items:
+        entries[item.id] = FeedEntry(
+            id=item.id,
+            source=item.source,
+            title=item.title,
+            url=item.url,
+            domain=item.domain,
+            discussion_url=item.discussion_url,
+            points=item.points,
+            num_comments=item.num_comments,
+            created_at=item.created_at,
+            final_score=item.final_score,
+            surfaced_at=surfaced_at,
+        )
+
+    ordered = sorted(entries.values(), key=lambda e: e.surfaced_at, reverse=True)
+
+    path = feed_path(data_dir)
+    tmp = path.with_suffix(".jsonl.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        for entry in ordered:
+            f.write(entry.model_dump_json())
+            f.write("\n")
+    tmp.replace(path)
+
+    logger.info("Upserted {} items into feed.jsonl ({} total)", len(items), len(ordered))
+    return path

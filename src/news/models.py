@@ -76,3 +76,25 @@ class RunMetadata(BaseModel):
 class RunOutput(BaseModel):
     meta: RunMetadata
     items: list[ScoredItem]
+
+
+class FeedEntry(BaseModel):
+    """One item in the persistent, ever-growing `feed.jsonl` that the Flutter
+    frontend reads. A slimmed-down, flattened `ScoredItem` -- just the fields
+    a reader-facing card needs -- plus `surfaced_at`, which `storage.upsert_feed`
+    bumps to the current run's time every time the item re-appears in a top-N
+    output, so "latest" in the feed means "most recently surfaced", not the
+    item's own publish date."""
+
+    id: str
+    source: str
+    title: str
+    url: str | None = None
+    domain: str | None = None
+    discussion_url: str
+    points: int = 0
+    num_comments: int = 0
+    created_at: datetime
+    final_score: float | None = None
+    surfaced_at: datetime
+    """When a pipeline run last included this item in its top-N output."""

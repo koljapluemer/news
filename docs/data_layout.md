@@ -21,7 +21,39 @@ data/
   latest.json               Copy of the most recent run's top10.json, at a
                              fixed path for downstream consumers (e.g. a
                              future UI) that don't want to track run ids.
+  feed.jsonl                Ever-growing, deduped-by-id history of every
+                             item that has ever made a run's top-N, one
+                             flattened record per line. The Flutter app
+                             (flutter/) reads this directly. See below.
 ```
+
+## `feed.jsonl`
+
+Unlike everything else under `data/`, this file is never replaced wholesale
+-- each run upserts into it. One JSON object per line (newest `surfaced_at`
+first):
+
+```json
+{
+  "id": "hackernews:12345678",
+  "source": "hackernews",
+  "title": "...",
+  "url": "https://...",
+  "domain": "example.com",
+  "discussion_url": "https://news.ycombinator.com/item?id=12345678",
+  "points": 234,
+  "num_comments": 89,
+  "created_at": "2026-09-11T09:00:00Z",
+  "final_score": 9.71,
+  "surfaced_at": "2026-09-11T14:30:05Z"
+}
+```
+
+If an item is still in a later run's top-N, its record is overwritten in
+place (fresh score, `surfaced_at` bumped to that run) rather than
+duplicated. Nothing is ever deleted from it -- an item that stops
+reappearing just sinks toward the bottom once the file is re-sorted by
+`surfaced_at`. See `storage.upsert_feed`.
 
 ## Why raw and runs are separate
 
