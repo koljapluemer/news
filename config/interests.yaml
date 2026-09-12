@@ -99,3 +99,16 @@ sources:
     enabled: true
     # Subreddit names, no "r/" prefix.
     subreddits: ["languagelearning", "internetisbeautiful", "sideproject"]
+
+  # crossref and openalex both index works across (almost) every scholarly
+  # publisher rather than one repository, so instead of categories/subreddits
+  # each takes a list of search queries -- one source instance per query,
+  # matched against paper title/abstract. Disabled by default, same reasoning
+  # as arxiv/reddit above: no sane default query to guess on your behalf.
+  crossref:
+    enabled: true
+    queries: ["second language acquisition", "adaptive learning", "flashcards", "intelligent tutoring system", "comprehensible input"]
+
+  openalex:
+    enabled: true
+    queries: ["second language acquisition", "adaptive learning", "flashcards", "intelligent tutoring system", "comprehensible input"]

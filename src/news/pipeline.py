@@ -26,7 +26,9 @@ from news.rank.embed import EMBEDDING_MODEL_NAME, EmbeddingRanker
 from news.rank.llm_rerank import DEFAULT_MIN_SHORTLIST_PER_SOURCE, DEFAULT_MODEL_NAME, LLMReranker
 from news.sources.arxiv import ArxivSource
 from news.sources.base import NewsSource
+from news.sources.crossref import CrossrefSource
 from news.sources.hackernews import HackerNewsSource
+from news.sources.openalex import OpenAlexSource
 from news.sources.reddit import RedditBatch, RedditSource
 from news import storage
 
@@ -58,10 +60,28 @@ def _reddit_factory(settings: SourceSettings | None) -> list[NewsSource]:
     return [RedditSource(subreddit=s, batch=batch) for s in subreddits]
 
 
+def _crossref_factory(settings: SourceSettings | None) -> list[NewsSource]:
+    queries = _extra(settings).get("queries", [])
+    if not queries:
+        logger.warning("crossref enabled but `sources.crossref.queries` is empty in the profile; skipping")
+        return []
+    return [CrossrefSource(query=q) for q in queries]
+
+
+def _openalex_factory(settings: SourceSettings | None) -> list[NewsSource]:
+    queries = _extra(settings).get("queries", [])
+    if not queries:
+        logger.warning("openalex enabled but `sources.openalex.queries` is empty in the profile; skipping")
+        return []
+    return [OpenAlexSource(query=q) for q in queries]
+
+
 SOURCE_FACTORIES: dict[str, Callable[[SourceSettings | None], list[NewsSource]]] = {
     "hackernews": _hackernews_factory,
     "arxiv": _arxiv_factory,
     "reddit": _reddit_factory,
+    "crossref": _crossref_factory,
+    "openalex": _openalex_factory,
 }
 
 
