@@ -5,9 +5,20 @@ import '../models/feed_item.dart';
 import '../util/format_date.dart';
 
 class FeedCard extends StatelessWidget {
-  const FeedCard({super.key, required this.item});
+  const FeedCard({
+    super.key,
+    required this.item,
+    required this.onCheckOff,
+    required this.onThumbsDown,
+  });
 
   final FeedItem item;
+
+  /// Called when the user dismisses the card as read.
+  final VoidCallback onCheckOff;
+
+  /// Called when the user marks the card as not interesting.
+  final VoidCallback onThumbsDown;
 
   Future<void> _open(BuildContext context, String url) async {
     final uri = Uri.tryParse(url);
@@ -34,7 +45,26 @@ class FeedCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.title, style: theme.textTheme.titleMedium),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(item.title, style: theme.textTheme.titleMedium),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.check_circle_outline),
+                    tooltip: 'Mark as read',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onCheckOff,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.thumb_down_outlined),
+                    tooltip: 'Not interested',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onThumbsDown,
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               Row(
                 children: [

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/feed_item.dart';
 
 const _prefsPathKey = 'feed_path';
+
+/// How many not-checked-off items the feed screen should try to show.
+const visibleFeedTotal = 10;
+
+/// Of [visibleFeedTotal], how many are filled with the most-recently
+/// surfaced items -- the rest come from the oldest end of the backlog so it
+/// eventually clears instead of never being seen.
+const visibleFeedNewestCount = 7;
 
 /// Reads and parses every line of the `feed.jsonl` at [path]. Runs in a
 /// background isolate via [compute] so a large, ever-growing history file
@@ -38,6 +47,24 @@ class FeedRepository extends ChangeNotifier {
 
   /// The [n] most recently surfaced items, newest first.
   List<FeedItem> latest(int n) => _items.take(n).toList();
+
+  /// Items to show on the feed screen: not-checked-off items, up to
+  /// [total] of them -- the [newestCount] most-recently-surfaced first,
+  /// then the oldest remaining ones, so the backlog of older items
+  /// eventually gets seen instead of being buried forever by new arrivals.
+  List<FeedItem> visibleItems({
+    int total = visibleFeedTotal,
+    int newestCount = visibleFeedNewestCount,
+  }) {
+    // _items is sorted by surfacedAt descending, so pending is too.
+    final pending = _items.where((i) => !i.checkedOff).toList();
+    if (pending.length <= total) return pending;
+    final oldestNeeded = total - newestCount;
+    return [
+      ...pending.take(newestCount),
+      ...pending.skip(pending.length - oldestNeeded),
+    ];
+  }
 
   /// Restores the persisted feed file path only. This is fast and must
   /// finish before the first frame; the actual parse is left to a separate,
@@ -73,5 +100,64 @@ class FeedRepository extends ChangeNotifier {
 
     isLoading = false;
     notifyListeners();
+  }
+
+  /// Marks [id] as checked off (dismissed/read), hiding it from the feed.
+  Future<void> checkOff(String id) => _patchEntry(id, {'checked_off': true});
+
+  /// Marks [id] as thumbs-downed -- hides it like [checkOff], but also
+  /// records the negative signal separately for a future pipeline stage.
+  Future<void> markThumbsDown(String id) =>
+      _patchEntry(id, {'checked_off': true, 'thumbs_down': true});
+
+  /// Patches [patch] into the JSON object on [id]'s line in `feed.jsonl`,
+  /// rewriting the file via temp file + rename (same convention as
+  /// `storage.upsert_feed` on the Python side) so a concurrent reader never
+  /// sees a half-written line. Every other line is left byte-for-byte
+  /// untouched. Updates the in-memory item in place rather than re-parsing
+  /// the whole file.
+  Future<void> _patchEntry(String id, Map<String, dynamic> patch) async {
+    final path = feedPath;
+    if (path == null) return;
+    final file = File(path);
+    if (!file.existsSync()) return;
+
+    final lines = await file.readAsLines();
+    var found = false;
+    final updated = <String>[];
+    for (final line in lines) {
+      if (found || line.trim().isEmpty) {
+        updated.add(line);
+        continue;
+      }
+      Map<String, dynamic>? decoded;
+      try {
+        final d = jsonDecode(line);
+        if (d is Map) decoded = Map<String, dynamic>.from(d);
+      } catch (_) {
+        // Malformed line -- leave it as-is, same tolerance as FeedItem.fromJsonLine.
+      }
+      if (decoded != null && decoded['id'] == id) {
+        decoded.addAll(patch);
+        updated.add(jsonEncode(decoded));
+        found = true;
+      } else {
+        updated.add(line);
+      }
+    }
+    if (!found) return;
+
+    final tmp = File('$path.tmp');
+    await tmp.writeAsString('${updated.join('\n')}\n');
+    await tmp.rename(path);
+
+    final index = _items.indexWhere((i) => i.id == id);
+    if (index != -1) {
+      _items[index] = _items[index].copyWith(
+        checkedOff: patch['checked_off'] as bool?,
+        thumbsDown: patch['thumbs_down'] as bool?,
+      );
+      notifyListeners();
+    }
   }
 }

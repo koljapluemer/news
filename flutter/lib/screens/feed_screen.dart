@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../repository/feed_repository.dart';
 import '../widgets/feed_card.dart';
 
-const _cardCount = 10;
-
 class FeedScreen extends StatelessWidget {
   const FeedScreen({super.key, required this.repository});
 
@@ -24,7 +22,7 @@ class FeedScreen extends StatelessWidget {
       );
     }
 
-    final items = repository.latest(_cardCount);
+    final items = repository.visibleItems();
 
     if (repository.isLoading && items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -52,7 +50,14 @@ class FeedScreen extends StatelessWidget {
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: items.length,
-        itemBuilder: (context, index) => FeedCard(item: items[index]),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return FeedCard(
+            item: item,
+            onCheckOff: () => repository.checkOff(item.id),
+            onThumbsDown: () => repository.markThumbsDown(item.id),
+          );
+        },
       ),
     );
   }

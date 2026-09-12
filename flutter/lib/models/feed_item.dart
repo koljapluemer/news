@@ -16,6 +16,8 @@ class FeedItem {
     required this.createdAt,
     this.finalScore,
     required this.surfacedAt,
+    this.checkedOff = false,
+    this.thumbsDown = false,
   });
 
   final String id;
@@ -32,6 +34,31 @@ class FeedItem {
   /// When a pipeline run last included this item in its top-N output. Feed
   /// entries are sorted by this, newest first.
   final DateTime surfacedAt;
+
+  /// Set when the user dismisses the card; hidden from the feed view once
+  /// true. Mirrors `checked_off` in `feed.jsonl`.
+  final bool checkedOff;
+
+  /// Like [checkedOff] (also hides the item), but records that the user
+  /// actively disliked it, for a future pipeline stage to use as a negative
+  /// signal. Mirrors `thumbs_down` in `feed.jsonl`.
+  final bool thumbsDown;
+
+  FeedItem copyWith({bool? checkedOff, bool? thumbsDown}) => FeedItem(
+        id: id,
+        source: source,
+        title: title,
+        url: url,
+        domain: domain,
+        discussionUrl: discussionUrl,
+        points: points,
+        numComments: numComments,
+        createdAt: createdAt,
+        finalScore: finalScore,
+        surfacedAt: surfacedAt,
+        checkedOff: checkedOff ?? this.checkedOff,
+        thumbsDown: thumbsDown ?? this.thumbsDown,
+      );
 
   /// The link a tap on the card should open: the external article URL if
   /// there is one (e.g. a Show HN with no link, or a self-post), otherwise
@@ -83,6 +110,8 @@ class FeedItem {
       createdAt: createdAt,
       finalScore: finalScore is num ? finalScore.toDouble() : null,
       surfacedAt: surfacedAt,
+      checkedOff: json['checked_off'] == true,
+      thumbsDown: json['thumbs_down'] == true,
     );
   }
 
