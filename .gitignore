@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+.env
 
 # Pipeline data and logs (throwaway/regeneratable)
 /data/

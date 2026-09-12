@@ -27,6 +27,11 @@ plain text.
 No comparable concept of points/votes exists here (`has_score = False`);
 `cited_by_count` exists but is a citation count, not a recency signal, and
 a new item will always read ~0.
+
+Like Crossref, OpenAlex's anonymous pool is heavily throttled; adding a
+`mailto` param moves requests into its dedicated polite pool -- see
+`news.sources._util.CONTACT_EMAIL` (set via `NEWS_CONTACT_EMAIL`).
+`get_with_retry` also retries a handful of times on 429 as a fallback.
 """
 
 from __future__ import annotations
@@ -37,10 +42,13 @@ import httpx
 
 from news.logging_setup import logger
 from news.models import RawItem
+from news.sources._util import CONTACT_EMAIL, get_with_retry
 
 OPENALEX_URL = "https://api.openalex.org/works"
 PER_PAGE = 50
-USER_AGENT = "news-pipeline/0.1 (personal single-user feed aggregator)"
+USER_AGENT = "news-pipeline/0.1 (personal single-user feed aggregator" + (
+    f"; mailto:{CONTACT_EMAIL})" if CONTACT_EMAIL else ")"
+)
 
 
 def _reconstruct_abstract(inverted_index: dict[str, list[int]] | None) -> str | None:
@@ -84,8 +92,10 @@ class OpenAlexSource:
             "sort": "publication_date:desc",
             "select": "id,doi,title,abstract_inverted_index,authorships,publication_date",
         }
+        if CONTACT_EMAIL:
+            params["mailto"] = CONTACT_EMAIL
         try:
-            resp = self._client.get(OPENALEX_URL, params=params)
+            resp = get_with_retry(self._client, OPENALEX_URL, params)
             resp.raise_for_status()
         except httpx.HTTPError as exc:
             logger.warning("OpenAlex request failed for {!r}: {}; skipping this run", self.query, exc)

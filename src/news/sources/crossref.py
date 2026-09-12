@@ -19,6 +19,14 @@ real `created` timestamp.
 `type:journal-article` is filtered server-side to skip components (figures,
 datasets, etc.) and other non-article records Crossref also indexes.
 
+Crossref's anonymous rate-limit pool is heavily throttled and shared with
+all unauthenticated traffic on the internet, so 429s are common with even
+light, sequential polling. Identifying a contact email via `mailto` moves
+requests into Crossref's dedicated "polite pool" with a much higher limit
+-- see `news.sources._util.CONTACT_EMAIL` (set via `NEWS_CONTACT_EMAIL`).
+`get_with_retry` additionally retries a handful of times on 429 (honoring
+`Retry-After`) as a fallback for whatever throttling still occurs.
+
 No comparable concept of points/votes exists here (`has_score = False`).
 """
 
@@ -30,11 +38,13 @@ import httpx
 
 from news.logging_setup import logger
 from news.models import RawItem
-from news.sources._util import clean_html
+from news.sources._util import CONTACT_EMAIL, clean_html, get_with_retry
 
 CROSSREF_URL = "https://api.crossref.org/works"
 ROWS = 50
-USER_AGENT = "news-pipeline/0.1 (personal single-user feed aggregator)"
+USER_AGENT = "news-pipeline/0.1 (personal single-user feed aggregator" + (
+    f"; mailto:{CONTACT_EMAIL})" if CONTACT_EMAIL else ")"
+)
 
 
 def _authors(entry: dict) -> str | None:
@@ -68,8 +78,10 @@ class CrossrefSource:
             "order": "desc",
             "select": "DOI,title,abstract,author,created",
         }
+        if CONTACT_EMAIL:
+            params["mailto"] = CONTACT_EMAIL
         try:
-            resp = self._client.get(CROSSREF_URL, params=params)
+            resp = get_with_retry(self._client, CROSSREF_URL, params)
             resp.raise_for_status()
         except httpx.HTTPError as exc:
             logger.warning("Crossref request failed for {!r}: {}; skipping this run", self.query, exc)
