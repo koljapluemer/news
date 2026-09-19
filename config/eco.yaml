@@ -1,0 +1,20 @@
+interests:
+  - text: "urban ecology"
+    weight: 0.8
+  - text: "foraging & mushrooms"
+    weight: 1
+  - text: "citizen science"
+    weight: 0.7
+
+sources:
+  reddit:
+    enabled: true
+    # Subreddit names, no "r/" prefix.
+    subreddits: ["berlin", "nature", "dataisbeautiful", "infographics"]
+    front_page: true
+  crossref:
+    enabled: true
+    queries: ["urban ecology", "urban eco systems", "sustainable city", "citizen science"]
+  openalex:
+    enabled: true
+    queries: ["urban ecology", "urban eco systems", "sustainable city", "citizen science"]
