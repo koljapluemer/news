@@ -29,7 +29,7 @@ from news.sources.base import NewsSource
 from news.sources.crossref import CrossrefSource
 from news.sources.hackernews import HackerNewsSource
 from news.sources.openalex import OpenAlexSource
-from news.sources.reddit import RedditBatch, RedditSource
+from news.sources.reddit import FRONT_PAGE, RedditBatch, RedditSource, credentials_from_env
 from news.sources.rss import RssSource
 from news import storage
 
@@ -51,14 +51,27 @@ def _arxiv_factory(settings: SourceSettings | None) -> list[NewsSource]:
 
 
 def _reddit_factory(settings: SourceSettings | None) -> list[NewsSource]:
-    subreddits = _extra(settings).get("subreddits", [])
-    if not subreddits:
-        logger.warning("reddit enabled but `sources.reddit.subreddits` is empty in the profile; skipping")
+    extra = _extra(settings)
+    subreddits = extra.get("subreddits", [])
+    credentials = credentials_from_env()
+    front_page = bool(extra.get("front_page", False))
+    if front_page and credentials is None:
+        logger.warning(
+            "`sources.reddit.front_page` is on but REDDIT_RSS_USER / REDDIT_RSS_FEED aren't set "
+            "(see .env.example); skipping the front page"
+        )
+        front_page = False
+    if not subreddits and not front_page:
+        logger.warning(
+            "reddit enabled but `sources.reddit.subreddits` is empty and front_page is off; skipping"
+        )
         return []
-    # All subreddits share one RedditBatch, so they cost one combined HTTP
-    # request instead of one per subreddit -- see sources/reddit.py.
-    batch = RedditBatch(subreddits)
-    return [RedditSource(subreddit=s, batch=batch) for s in subreddits]
+    # All targets share one RedditBatch, which decides how to fetch them
+    # (per-feed with RSS credentials, one combined request without) -- see
+    # sources/reddit.py.
+    batch = RedditBatch(subreddits, credentials=credentials, front_page=front_page)
+    targets = [*subreddits, *([FRONT_PAGE] if front_page else [])]
+    return [RedditSource(subreddit=t, batch=batch) for t in targets]
 
 
 def _crossref_factory(settings: SourceSettings | None) -> list[NewsSource]:

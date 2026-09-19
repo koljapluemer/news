@@ -15,7 +15,7 @@ src/news/
     base.py             NewsSource protocol
     hackernews.py        Algolia HN Search API implementation
     arxiv.py              Per-category arXiv RSS digest
-    reddit.py              Per-subreddit Atom feed
+    reddit.py              Per-subreddit (and front page) Atom feeds
     _util.py               Shared HTML/domain cleanup helpers
 
   filters/
@@ -121,25 +121,60 @@ here so they're easy to revisit rather than silently forgotten:
   gives every paper announced on a given day the same `pubDate` (midnight
   US/Eastern) -- there's no finer timestamp to fetch. Fine for a ~30h
   window, but don't expect within-day ordering or precision from it.
-- **reddit has no reliable external link, and RSS is unauthenticated.**
-  Reddit's Atom feed only exposes the comments permalink, not a link
-  post's actual target URL, so `url`/`domain` are always the reddit.com
-  permalink -- domain-based blacklisting won't see a link post's real
-  domain. The feed is also unauthenticated (Reddit's API requires manual
-  approval since Nov 2025).
-- **All configured subreddits are fetched as one combined request.**
-  Reddit tightened unauthenticated RSS to ~1 request/minute per IP in
-  mid-2026 (down from ~100/10min), so N subreddits as N sequential
-  requests reliably 429s past N=1. `RedditBatch` (`sources/reddit.py`)
-  fetches every subreddit in the profile via one multireddit URL
-  (`r/sub1+sub2+.../new.rss`) and splits the result by each entry's own
-  `<category>`, so `RedditSource` -- and everything downstream: caching,
-  logging, the shortlist floor, interest scoping -- still operates
-  per-subreddit exactly as if each had its own request. The real
-  trade-off: `FEED_LIMIT` (100) is a budget shared across the whole
-  batch, not per subreddit, so a very active subreddit can crowd quieter
-  ones out of a given fetch -- watch for a configured subreddit
-  unexpectedly returning 0 items while others return plenty.
+- **reddit has no reliable external link.** Reddit's Atom feed only
+  exposes the comments permalink, not a link post's actual target URL, so
+  `url`/`domain` are always the reddit.com permalink -- domain-based
+  blacklisting won't see a link post's real domain. (Reddit's official API
+  has required manual app approval since Nov 2025, so RSS is what we use.)
+- **reddit fetching has two modes, keyed on `REDDIT_RSS_USER` /
+  `REDDIT_RSS_FEED` in `.env`.** Reddit tightened *anonymous* RSS to ~1
+  request/minute per IP in mid-2026 (down from ~100/10min). Sending the
+  account's private feed `user=`/`feed=` params (from
+  <https://www.reddit.com/prefs/feeds/>) reportedly lifts that
+  ([source](https://lapcatsoftware.com/articles/2026/6/3.html), a single
+  blog post -- we've seen it work, but it's undocumented Reddit behavior
+  that can change).
+  - *With credentials:* one request per subreddit, each with its own
+    `FEED_LIMIT` (100) budget; and `sources.reddit.front_page: true` also
+    fetches the personal front page (`/.rss`) as an extra source named
+    `reddit:front-page`. Its items keep their real subreddit as
+    `RawItem.source`, so interest scoping and `max_per_source` treat them
+    like any other post from that subreddit; overlap with configured
+    subreddits is deduped by id in the hard filters. The front page feed is
+    Reddit's *hot* ranking of your subscriptions, not chronological.
+  - *Without credentials:* all subreddits in one combined multireddit
+    request (`r/sub1+sub2+.../new.rss`), split back up by each entry's
+    `<category>`. The real trade-off: the 100-item budget is shared across
+    the whole batch, so a very active subreddit can crowd quieter ones out
+    -- watch for a configured subreddit unexpectedly returning 0 items
+    while others return plenty. `front_page` is skipped with a warning (an
+    anonymous `/.rss` is just Reddit's generic default front page).
+  - *The pipeline's time window is ignored for reddit.* Every entry the
+    feed returns (newest 100 per request) is kept regardless of age; the
+    window used to discard most of what came back. Consequences: older
+    posts can reappear in a run's candidates (dedup is per run, by id), and
+    a very active subreddit polled infrequently can still miss posts
+    between runs, since the feed only goes back 100 entries.
+  - `RedditBatch` (`sources/reddit.py`) does the fetching once and
+    `RedditSource` instances read their slice, so caching, logging, the
+    shortlist floor and scoping are per-source in both modes.
+  - The `feed` token is a credential: httpx error messages embed the full
+    URL, so all logged exceptions go through `RedditBatch._redact`. Keep
+    that in mind when adding any new logging around Reddit requests.
+- **reddit follow-ups / TODO.**
+  - Watch the first few real runs for `429`s or `403`s in the logs
+    (`Reddit rate-limited feed ...`); if authenticated requests get
+    limited too, the `user`/`feed` trick has stopped working.
+  - Durable fix: apply for Reddit's official Data API (free for
+    non-commercial use, ~100 req/min, but manual approval that can take
+    weeks) and swap `RedditBatch` to OAuth -- that would also give real
+    scores/comment counts and external link URLs, letting `has_score` flip
+    to True.
+  - Fallback if RSS dies entirely: see
+    `docs/issues/add-headless-account-cookie-scraper-for-reddit.md`, or
+    Arctic Shift / PullPush archives (freshness unverified).
+  - `front_page` always uses hot ranking (`/.rss`); the chronological
+    `/new/.rss` variant might suit windowed fetching better, untested.
 - **`max_per_source` bites immediately once >1 source is enabled.** With
   only `hackernews` on, the cap never triggers (nothing to compete with).
   Turning on `arxiv`/`reddit` in `config/interests.yaml` makes it active

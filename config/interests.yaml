@@ -103,6 +103,10 @@ sources:
     enabled: true
     # Subreddit names, no "r/" prefix.
     subreddits: ["languagelearning", "internetisbeautiful", "sideproject"]
+    # Also pull your personal front page (https://www.reddit.com/.rss).
+    # Needs REDDIT_RSS_USER / REDDIT_RSS_FEED in .env, otherwise it's
+    # skipped with a warning. Overlap with `subreddits` is deduped.
+    front_page: true
 
   # crossref and openalex both index works across (almost) every scholarly
   # publisher rather than one repository, so instead of categories/subreddits
