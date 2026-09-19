@@ -3,12 +3,16 @@
 data/
   raw/<source>/<date>/items.jsonl   -- one fetch per source per calendar day,
                                         cached so re-running the same day
-                                        doesn't hit the API again
+                                        doesn't hit the API again. Shared by
+                                        all profiles.
   raw/<source>/<date>/manifest.json -- window + fetch metadata
-  runs/<run_id>/config.json         -- interest profile snapshot for the run
-  runs/<run_id>/scored.jsonl        -- every candidate that survived stage 0,
+  profiles/<profile>/               -- everything below is per profile
+    runs/<run_id>/config.json       -- interest profile snapshot for the run
+    runs/<run_id>/scored.jsonl      -- every candidate that survived stage 0,
                                         with stage-1/stage-2 scores attached
-  runs/<run_id>/top10.json          -- final ranked output
+    runs/<run_id>/top10.json        -- final ranked output
+    latest.json                     -- copy of the newest top10.json
+    feed.jsonl                      -- persistent feed the Flutter app reads
 """
 
 from __future__ import annotations
@@ -68,8 +72,14 @@ def save_raw(
     logger.info("Saved {} raw {} items to {}", len(items), source, items_path)
 
 
-def new_run_dir(data_dir: Path, run_id: str) -> Path:
-    run_dir = data_dir / "runs" / run_id
+def profile_dir(data_dir: Path, profile_name: str) -> Path:
+    """Per-profile output root: runs, latest pointer and feed. Raw fetches
+    stay outside it (see `raw_dir`) so profiles share the cache."""
+    return data_dir / "profiles" / profile_name
+
+
+def new_run_dir(profile_dir: Path, run_id: str) -> Path:
+    run_dir = profile_dir / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir
 
@@ -93,23 +103,23 @@ def save_run_output(run_dir: Path, output: RunOutput) -> Path:
     return out_path
 
 
-def save_latest_pointer(data_dir: Path, output: RunOutput) -> Path:
+def save_latest_pointer(profile_dir: Path, output: RunOutput) -> Path:
     """Convenience copy of the most recent run's output at a fixed path,
     so a future UI/consumer doesn't need to know run ids."""
-    latest_path = data_dir / "latest.json"
+    latest_path = profile_dir / "latest.json"
     latest_path.write_text(output.model_dump_json(indent=2), encoding="utf-8")
     return latest_path
 
 
-def feed_path(data_dir: Path) -> Path:
-    return data_dir / "feed.jsonl"
+def feed_path(profile_dir: Path) -> Path:
+    return profile_dir / "feed.jsonl"
 
 
-def load_feed(data_dir: Path) -> dict[str, FeedEntry]:
+def load_feed(profile_dir: Path) -> dict[str, FeedEntry]:
     """Loads the persistent feed, keyed by item id. Missing file (first
     run) or a line that fails to parse -- treated as "not there yet" rather
     than fatal, same policy as `load_cached_raw`."""
-    path = feed_path(data_dir)
+    path = feed_path(profile_dir)
     if not path.exists():
         return {}
     entries: dict[str, FeedEntry] = {}
@@ -121,7 +131,7 @@ def load_feed(data_dir: Path) -> dict[str, FeedEntry]:
     return entries
 
 
-def upsert_feed(data_dir: Path, items: list[ScoredItem], surfaced_at: datetime) -> Path:
+def upsert_feed(profile_dir: Path, items: list[ScoredItem], surfaced_at: datetime) -> Path:
     """Merges this run's top-N items into the persistent, ever-growing
     `feed.jsonl`, keyed by item id. An item already in the feed (e.g. still
     ranking in today's top 10) has its data refreshed and `surfaced_at`
@@ -135,7 +145,7 @@ def upsert_feed(data_dir: Path, items: list[ScoredItem], surfaced_at: datetime) 
     `checked_off`/`thumbs_down` are set by the Flutter app, never by a
     pipeline run -- an item re-surfacing here carries its existing flags
     forward rather than resetting them."""
-    entries = load_feed(data_dir)
+    entries = load_feed(profile_dir)
     for item in items:
         existing = entries.get(item.id)
         entries[item.id] = FeedEntry(
@@ -156,7 +166,7 @@ def upsert_feed(data_dir: Path, items: list[ScoredItem], surfaced_at: datetime) 
 
     ordered = sorted(entries.values(), key=lambda e: e.surfaced_at, reverse=True)
 
-    path = feed_path(data_dir)
+    path = feed_path(profile_dir)
     tmp = path.with_suffix(".jsonl.tmp")
     with tmp.open("w", encoding="utf-8") as f:
         for entry in ordered:

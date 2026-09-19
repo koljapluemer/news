@@ -24,7 +24,8 @@ a handful of candidates:
    so it's restricted to a shortlist.
 
 The final top 10 (by LLM score, embedding score as tiebreaker) is written
-to `data/runs/<run_id>/top10.json` and mirrored to `data/latest.json`.
+to `data/profiles/<profile>/runs/<run_id>/top10.json` and mirrored to
+`data/profiles/<profile>/latest.json`.
 
 See [`docs/architecture.md`](docs/architecture.md) for the module layout
 and design rationale, and [`docs/data_layout.md`](docs/data_layout.md) for
@@ -46,6 +47,17 @@ Edit `config/interests.yaml` with your real interests, then:
 
 ```bash
 uv run news
+```
+
+To keep several interest profiles (e.g. work vs. hobbies), add more YAML
+files to `config/` and select one with `--profile` -- a name
+(`config/<name>.yaml`) or a path. Each profile gets its own output under
+`data/profiles/<name>/`, and the Flutter app has a selector for switching
+between them:
+
+```bash
+uv run news --profile work               # config/work.yaml
+uv run news --profile ~/somewhere/x.yaml # any file; profile name is "x"
 ```
 
 Useful options (see `uv run news --help` for the full list):

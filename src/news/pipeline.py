@@ -30,6 +30,7 @@ from news.sources.crossref import CrossrefSource
 from news.sources.hackernews import HackerNewsSource
 from news.sources.openalex import OpenAlexSource
 from news.sources.reddit import RedditBatch, RedditSource
+from news.sources.rss import RssSource
 from news import storage
 
 
@@ -76,18 +77,34 @@ def _openalex_factory(settings: SourceSettings | None) -> list[NewsSource]:
     return [OpenAlexSource(query=q) for q in queries]
 
 
+def _rss_factory(settings: SourceSettings | None) -> list[NewsSource]:
+    feeds = _extra(settings).get("feeds", [])
+    if not feeds:
+        logger.warning("rss enabled but `sources.rss.feeds` is empty in the profile; skipping")
+        return []
+    sources: list[NewsSource] = []
+    for feed in feeds:
+        if isinstance(feed, str):
+            sources.append(RssSource(feed_url=feed))
+        else:
+            sources.append(RssSource(feed_url=feed["url"], label=feed.get("name")))
+    return sources
+
+
 SOURCE_FACTORIES: dict[str, Callable[[SourceSettings | None], list[NewsSource]]] = {
     "hackernews": _hackernews_factory,
     "arxiv": _arxiv_factory,
     "reddit": _reddit_factory,
     "crossref": _crossref_factory,
     "openalex": _openalex_factory,
+    "rss": _rss_factory,
 }
 
 
 @dataclass
 class PipelineConfig:
     data_dir: Path
+    profile_name: str
     interests_path: Path
     window_hours: float = 30.0
     min_points: int = 1
@@ -165,7 +182,9 @@ def _fetch_all(
 def run_pipeline(cfg: PipelineConfig) -> Path:
     profile = load_interest_profile(cfg.interests_path)
     logger.info(
-        "Loaded interest profile: {} interests, {} anti-interests, {} blacklist terms, {} blacklist domains",
+        "Loaded interest profile '{}' from {}: {} interests, {} anti-interests, {} blacklist terms, {} blacklist domains",
+        cfg.profile_name,
+        cfg.interests_path,
         len(profile.interests),
         len(profile.anti_interests),
         len(profile.blacklist.terms),
@@ -222,7 +241,8 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
         logger.debug("#{}: [{}] {}", rank, item.final_score, item.title)
 
     run_id = window_end.strftime("%Y-%m-%dT%H-%M-%S")
-    run_dir = storage.new_run_dir(cfg.data_dir, run_id)
+    out_dir = storage.profile_dir(cfg.data_dir, cfg.profile_name)
+    run_dir = storage.new_run_dir(out_dir, run_id)
     storage.save_run_config(run_dir, profile.model_dump())
     storage.save_scored(run_dir, scored)
 
@@ -240,8 +260,8 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
     )
     output = RunOutput(meta=meta, items=top)
     out_path = storage.save_run_output(run_dir, output)
-    storage.save_latest_pointer(cfg.data_dir, output)
-    storage.upsert_feed(cfg.data_dir, top, surfaced_at=window_end)
+    storage.save_latest_pointer(out_dir, output)
+    storage.upsert_feed(out_dir, top, surfaced_at=window_end)
 
     logger.info("Run complete: {} top items written to {}", len(top), out_path)
     return out_path

@@ -1,6 +1,6 @@
 {
-    "name": "note",
-    "short_name": "note",
+    "name": "News",
+    "short_name": "News",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

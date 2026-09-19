@@ -41,7 +41,7 @@ class _NewsAppState extends State<NewsApp> {
 
   Future<void> _bootstrap() async {
     if (Platform.isAndroid) {
-      // Full disk access, so the feed file can live anywhere on device.
+      // Full disk access, so the data folder can live anywhere on device.
       await Permission.manageExternalStorage.request();
     }
     await _repository.init();
@@ -70,9 +70,9 @@ class _NewsAppState extends State<NewsApp> {
     if (!_bootstrapped) {
       return const _LoadingScaffold(message: 'Starting…');
     }
-    if (_repository.feedPath == null) {
+    if (_repository.dataDir == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Choose your feed file')),
+        appBar: AppBar(title: const Text('Choose your data folder')),
         body: SettingsScreen(repository: _repository),
       );
     }

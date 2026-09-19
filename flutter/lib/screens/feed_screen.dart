@@ -10,12 +10,12 @@ class FeedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (repository.feedPath == null) {
+    if (repository.dataDir == null) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            'No feed file chosen yet. Pick feed.jsonl in Settings.',
+            'No data folder chosen yet. Pick it in Settings.',
             textAlign: TextAlign.center,
           ),
         ),
@@ -42,7 +42,7 @@ class FeedScreen extends StatelessWidget {
     }
 
     if (items.isEmpty) {
-      return const Center(child: Text('No items in the feed yet.'));
+      return const Center(child: Text('No items in this feed yet.'));
     }
 
     return RefreshIndicator(

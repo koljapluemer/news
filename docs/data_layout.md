@@ -6,26 +6,44 @@ changes over time).
 
 ```
 data/
-  raw/
+  raw/                        Shared by every profile (see below).
     hackernews/
       2026-09-11/
         items.jsonl       One JSON RawItem per line, as fetched.
         manifest.json     Fetch window, fetched_at timestamp, item count.
-  runs/
-    2026-09-11T14-30-05/
-      config.json          Snapshot of the interest profile used this run.
-      scored.jsonl          Every candidate that survived stage 0, with
-                             stage-1 embedding scores and (for shortlisted
-                             items) stage-2 LLM scores/reasons attached.
-      top10.json            Final output: metadata + top-N ranked items.
-  latest.json               Copy of the most recent run's top10.json, at a
-                             fixed path for downstream consumers (e.g. a
-                             future UI) that don't want to track run ids.
-  feed.jsonl                Ever-growing, deduped-by-id history of every
-                             item that has ever made a run's top-N, one
-                             flattened record per line. The Flutter app
-                             (flutter/) reads this directly. See below.
+  profiles/
+    <profile>/                One directory per interest profile
+                              (`uv run news --profile <profile>`).
+      runs/
+        2026-09-11T14-30-05/
+          config.json      Snapshot of the interest profile used this run.
+          scored.jsonl     Every candidate that survived stage 0, with
+                           stage-1 embedding scores and (for shortlisted
+                           items) stage-2 LLM scores/reasons attached.
+          top10.json       Final output: metadata + top-N ranked items.
+      latest.json          Copy of the most recent run's top10.json, at a
+                           fixed path for downstream consumers that don't
+                           want to track run ids.
+      feed.jsonl           Ever-growing, deduped-by-id history of every
+                           item that has ever made one of this profile's
+                           run's top-N, one flattened record per line. The
+                           Flutter app (flutter/) reads this directly. See
+                           below.
 ```
+
+## Profiles
+
+A profile is a YAML file in `config/` (`config/<name>.yaml`, or any path
+passed to `--profile`). Its file stem, `<name>`, is the profile name and
+names its output directory `data/profiles/<name>/`. The Flutter app is
+pointed at the `data/` folder and lists every `profiles/*/` directory that
+has a `feed.jsonl` in its profile selector.
+
+Raw fetches are keyed by source and day only, so they live outside the
+profile directories: two profiles that both enable e.g. `hackernews` share
+one cached fetch per day. (Sources with per-profile targets -- subreddits,
+search queries -- are keyed by that target, so they're shared exactly when
+the target is the same.)
 
 ## `feed.jsonl`
 

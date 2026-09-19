@@ -42,6 +42,8 @@ interests:
   - text: "interlanguage transfer effects, critical period hypothesis, second-language attrition, computational models of language acquisition"
     weight: 1.3
     sources: ["arxiv"]
+  - text: "innovative, applied user experience, interaction design, human-machine interaction"
+    weight: 0.7
 
 # EXAMPLE anti-interests -- replace with your own before running for real.
 anti_interests:
@@ -49,6 +51,8 @@ anti_interests:
     weight: 0.8
   - text: "theory of artifical intelligence, LLM paper, machine learning paper, theoretical computer science, AI model comparison, Silicon Valley drama"
     weight: 0.4
+  - text: "Generic high level social theories or research frameworks with no actual specific, practical guides or findings"
+    weight: 1
   - text: "Large Language Model"
     weight: 0.7
   - text: "education politics, elementary school education"
@@ -112,3 +116,28 @@ sources:
   openalex:
     enabled: true
     queries: ["second language acquisition", "adaptive learning", "flashcards", "intelligent tutoring system", "comprehensible input"]
+
+  # Generic RSS/Atom source -- one instance per feed, for blogs and other
+  # sites with no dedicated source above. Disabled by default, same
+  # reasoning as arxiv/reddit: no sane default feed list to guess on your
+  # behalf. Each entry in `feeds` is either a plain feed URL (its source
+  # name is derived from the URL's domain, e.g. "rss:example.com") or a
+  # {url, name} mapping when you want a clearer/disambiguated name (e.g.
+  # two feeds on the same domain).
+  rss:
+    enabled: true
+    feeds:
+      - 
+        "name": "journal applied lingu"
+        "url": "https://academic.oup.com/rss/site_5135/2996.xml"
+      - 
+        "name": "ProductHunt"
+        "url": "https://www.producthunt.com/feed?category=undefined"
+      - "name": "matuschak-personal-autogen"
+        "url": "https://rss.app/r/feed/XLMPHj6ERxm0rP0R"
+      - "name": "justinmath"
+        "url": "https://justinmath.com/feed.xml"
+      - "name": "nngroup"
+        "url": "https://www.nngroup.com/feed/rss/"
+      - "name": "ideo"
+        "url": "https://www.ideou.com/index.rss"

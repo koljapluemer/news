@@ -14,6 +14,29 @@ from news.rank.llm_rerank import DEFAULT_MIN_SHORTLIST_PER_SOURCE, DEFAULT_MODEL
 app = typer.Typer(add_completion=False)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+CONFIG_DIR = REPO_ROOT / "config"
+DEFAULT_PROFILE = "interests"
+
+
+def resolve_profile(profile: str) -> tuple[str, Path]:
+    """Turns the `--profile` value into `(profile name, YAML path)`.
+
+    A bare name ("work") means `config/<name>.yaml`; anything else is
+    treated as a path to a YAML file. The name -- the file's stem -- also
+    names the per-profile output directory under `data/profiles/`."""
+    is_bare_name = Path(profile).name == profile and Path(profile).suffix not in {".yaml", ".yml"}
+    if is_bare_name:
+        path = CONFIG_DIR / f"{profile}.yaml"
+        if not path.exists() and (yml := path.with_suffix(".yml")).exists():
+            path = yml
+    else:
+        path = Path(profile).expanduser()
+    if not path.is_file():
+        available = sorted(p.stem for p in CONFIG_DIR.glob("*.y*ml"))
+        raise typer.BadParameter(
+            f"profile file not found: {path} (profiles in {CONFIG_DIR}: {', '.join(available) or 'none'})"
+        )
+    return path.stem, path
 
 
 @app.command()
@@ -27,8 +50,12 @@ def main(
     ),
     max_per_source: int = typer.Option(4, help="Max final output items from any one source."),
     min_points: int = typer.Option(1, help="Minimum points to keep a story."),
-    interests: Path = typer.Option(
-        REPO_ROOT / "config" / "interests.yaml", help="Path to the interest profile YAML."
+    profile: str = typer.Option(
+        DEFAULT_PROFILE,
+        "--profile",
+        "-p",
+        help="Interest profile: a name (config/<name>.yaml) or a path to a profile YAML. "
+        "Output goes to <data-dir>/profiles/<name>/.",
     ),
     data_dir: Path = typer.Option(REPO_ROOT / "data", help="Where raw/run data is stored."),
     log_dir: Path = typer.Option(REPO_ROOT / "logs", help="Where log files are written."),
@@ -40,12 +67,14 @@ def main(
 ) -> None:
     """Fetch recent items from every source enabled in your interest profile,
     rank them against your interests, and write the top N to
-    data/runs/<run_id>/top10.json (and data/latest.json)."""
+    data/profiles/<name>/runs/<run_id>/top10.json (and .../latest.json)."""
+    profile_name, interests_path = resolve_profile(profile)
     configure_logging(log_dir)
 
     cfg = PipelineConfig(
         data_dir=data_dir,
-        interests_path=interests,
+        profile_name=profile_name,
+        interests_path=interests_path,
         window_hours=hours,
         min_points=min_points,
         shortlist_size=shortlist,

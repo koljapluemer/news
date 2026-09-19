@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/feed_item.dart';
 
-const _prefsPathKey = 'feed_path';
+const _prefsDataDirKey = 'data_dir';
+const _prefsProfileKey = 'profile';
 
 /// How many not-checked-off items the feed screen should try to show.
 const visibleFeedTotal = 10;
@@ -31,8 +33,33 @@ List<FeedItem> parseFeedIsolate(String path) {
   return items;
 }
 
+/// Names of the profiles under `<dataDir>/profiles/` -- the sub-directories
+/// that already contain a `feed.jsonl` (i.e. the pipeline has run for them
+/// at least once). Sorted alphabetically.
+List<String> listProfiles(String dataDir) {
+  final dir = Directory(p.join(dataDir, 'profiles'));
+  if (!dir.existsSync()) return [];
+  final names = <String>[];
+  for (final entry in dir.listSync()) {
+    if (entry is Directory &&
+        File(p.join(entry.path, 'feed.jsonl')).existsSync()) {
+      names.add(p.basename(entry.path));
+    }
+  }
+  names.sort();
+  return names;
+}
+
 class FeedRepository extends ChangeNotifier {
-  String? feedPath;
+  /// The pipeline's data directory (the one holding `raw/` and `profiles/`).
+  String? dataDir;
+
+  /// Profiles found under [dataDir], see [listProfiles].
+  List<String> profiles = [];
+
+  /// The profile whose feed is shown; one of [profiles], or null if none.
+  String? selectedProfile;
+
   bool isLoading = false;
   String? loadError;
   DateTime? lastLoadedAt;
@@ -66,30 +93,73 @@ class FeedRepository extends ChangeNotifier {
     ];
   }
 
-  /// Restores the persisted feed file path only. This is fast and must
-  /// finish before the first frame; the actual parse is left to a separate,
-  /// caller-triggered [loadFromDisk].
-  Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    feedPath = prefs.getString(_prefsPathKey);
+  /// Path of the selected profile's `feed.jsonl`, or null until both a data
+  /// directory and a profile are known.
+  String? get feedPath {
+    final dir = dataDir;
+    final profile = selectedProfile;
+    if (dir == null || profile == null) return null;
+    return p.join(dir, 'profiles', profile, 'feed.jsonl');
   }
 
-  Future<void> setPath(String path) async {
+  /// Restores the persisted data directory and profile choice, and lists
+  /// the available profiles. This is fast and must finish before the first
+  /// frame; the actual parse is left to a separate, caller-triggered
+  /// [loadFromDisk].
+  Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsPathKey, path);
-    feedPath = path;
+    dataDir = prefs.getString(_prefsDataDirKey);
+    _refreshProfiles(prefs.getString(_prefsProfileKey));
+  }
+
+  Future<void> setDataDir(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsDataDirKey, path);
+    dataDir = path;
+    _refreshProfiles(selectedProfile);
     await loadFromDisk();
   }
 
+  Future<void> selectProfile(String name) async {
+    if (name == selectedProfile) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsProfileKey, name);
+    selectedProfile = name;
+    _items = [];
+    await loadFromDisk();
+  }
+
+  /// Re-scans [dataDir] for profiles. Keeps [preferred] selected if it still
+  /// exists, otherwise falls back to the first profile (or null if none).
+  void _refreshProfiles(String? preferred) {
+    final dir = dataDir;
+    profiles = dir == null ? [] : listProfiles(dir);
+    selectedProfile = profiles.contains(preferred)
+        ? preferred
+        : (profiles.isEmpty ? null : profiles.first);
+  }
+
   Future<void> loadFromDisk() async {
+    // A pipeline run may have created a new profile since the last scan.
+    _refreshProfiles(selectedProfile);
     final path = feedPath;
-    if (path == null) return;
+    if (path == null) {
+      _items = [];
+      loadError = dataDir == null
+          ? null
+          : 'No profiles found in ${p.join(dataDir!, 'profiles')}. '
+                'Run the pipeline first.';
+      notifyListeners();
+      return;
+    }
     isLoading = true;
     loadError = null;
     notifyListeners();
 
     try {
       final loaded = await compute(parseFeedIsolate, path);
+      // The user switched profile while this parse was running.
+      if (path != feedPath) return;
       loaded.sort((a, b) => b.surfacedAt.compareTo(a.surfacedAt));
       _items = loaded;
       lastLoadedAt = DateTime.now();

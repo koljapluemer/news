@@ -18,17 +18,14 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _busy = false;
 
-  Future<void> _pickFile() async {
+  Future<void> _pickFolder() async {
     setState(() => _busy = true);
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['jsonl'],
-        dialogTitle: 'Choose feed.jsonl',
+      final path = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Choose the pipeline data folder',
       );
-      final path = result?.files.single.path;
       if (path != null) {
-        await widget.repository.setPath(path);
+        await widget.repository.setDataDir(path);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -47,14 +44,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Feed file', style: theme.textTheme.titleMedium),
+        Text('Data folder', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
-        Text(repo.feedPath ?? 'Not set'),
+        Text(repo.dataDir ?? 'Not set'),
         const SizedBox(height: 4),
         Text(
-          repo.isLoading ? 'Loading feed…' : '${repo.count} items loaded',
+          'The pipeline\'s data/ folder. Each profile\'s feed is read from '
+          'profiles/<name>/feed.jsonl inside it.',
           style: theme.textTheme.bodySmall,
         ),
+        if (repo.dataDir != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            repo.profiles.isEmpty
+                ? 'No profiles found'
+                : 'Profiles: ${repo.profiles.join(', ')}',
+          ),
+          const SizedBox(height: 4),
+          Text(
+            repo.isLoading
+                ? 'Loading feed…'
+                : '${repo.count} items loaded'
+                      '${repo.selectedProfile == null ? '' : ' from ${repo.selectedProfile}'}',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
         if (repo.loadError != null) ...[
           const SizedBox(height: 8),
           Text(
@@ -66,11 +80,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Row(
           children: [
             FilledButton(
-              onPressed: _busy ? null : _pickFile,
-              child: Text(_busy ? 'Loading…' : 'Choose feed.jsonl'),
+              onPressed: _busy ? null : _pickFolder,
+              child: Text(_busy ? 'Loading…' : 'Choose data folder'),
             ),
             const SizedBox(width: 12),
-            if (repo.feedPath != null)
+            if (repo.dataDir != null)
               OutlinedButton(
                 onPressed: repo.isLoading ? null : repo.loadFromDisk,
                 child: const Text('Refresh'),
@@ -82,7 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text('Storage permission', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           const Text(
-            'Full disk access is required to read the feed file wherever '
+            'Full disk access is required to read the data folder wherever '
             'it lives on the device.',
           ),
           const SizedBox(height: 8),

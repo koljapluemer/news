@@ -6,7 +6,7 @@ dev:
     cd flutter && flutter run -d linux
 
 # Build the Linux release bundle and (re)install it into ~/.local, overriding any existing install
-build:
+reinstall:
     #!/usr/bin/env bash
     set -euo pipefail
     cd flutter
@@ -14,7 +14,7 @@ build:
     mkdir -p ~/.local/share/news
     cp -r build/linux/x64/release/bundle/* ~/.local/share/news/
     mkdir -p ~/.local/bin
-    ln -sf ~/.local/share/news/note ~/.local/bin/news
+    ln -sf ~/.local/share/news/news ~/.local/bin/news
 
     for size in 16 32 48 64 128 256 512; do
         dir=~/.local/share/icons/hicolor/${size}x${size}/apps
@@ -28,10 +28,10 @@ build:
     [Desktop Entry]
     Type=Application
     Name=News
-    Exec=$HOME/.local/share/news/note
+    Exec=$HOME/.local/share/news/news
     Icon=com.koljasam.news
     Categories=Utility;
-    StartupWMClass=com.example.note
+    StartupWMClass=com.example.news
     EOF
     command -v update-desktop-database >/dev/null && update-desktop-database ~/.local/share/applications || true
 
