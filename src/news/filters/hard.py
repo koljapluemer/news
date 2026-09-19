@@ -1,6 +1,7 @@
 """Stage 0: cheap, non-ML filtering.
 
-Dedup, drop below a minimum score, drop exact blacklist term/domain hits.
+Dedup, drop items outside the profile's `languages`, drop below a minimum
+score, drop exact blacklist term/domain hits.
 Everything here is a hard exclude -- for "less interested" use interest
 weights in stage 1 instead.
 """
@@ -21,6 +22,7 @@ def apply_hard_filters(
     `pipeline._resolve_min_points`), since every item there has
     points=0 and a nonzero floor would silently drop everything."""
     seen_ids: set[str] = set()
+    languages = set(profile.languages)
     blacklist_terms = [t.lower() for t in profile.blacklist.terms]
     blacklist_domains = {d.lower() for d in profile.blacklist.domains}
 
@@ -29,6 +31,9 @@ def apply_hard_filters(
         if item.id in seen_ids:
             continue
         seen_ids.add(item.id)
+
+        if item.lang.lower() not in languages:
+            continue
 
         if item.points < min_points.get(item.source, 0):
             continue
@@ -43,9 +48,10 @@ def apply_hard_filters(
         kept.append(item)
 
     logger.info(
-        "Hard filters: {} -> {} items (min_points={}, {} blacklist terms, {} blacklist domains)",
+        "Hard filters: {} -> {} items (languages={}, min_points={}, {} blacklist terms, {} blacklist domains)",
         len(items),
         len(kept),
+        sorted(languages),
         min_points,
         len(blacklist_terms),
         len(blacklist_domains),

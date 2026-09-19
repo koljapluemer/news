@@ -22,7 +22,7 @@ from news.config import InterestProfile, SourceSettings, load_interest_profile
 from news.filters.hard import apply_hard_filters
 from news.logging_setup import logger
 from news.models import RawItem, RunMetadata, RunOutput, ScoredItem
-from news.rank.embed import EMBEDDING_MODEL_NAME, EmbeddingRanker
+from news.rank.embed import EmbeddingRanker, resolve_embedder
 from news.rank.llm_rerank import DEFAULT_MIN_SHORTLIST_PER_SOURCE, DEFAULT_MODEL_NAME, LLMReranker
 from news.sources.arxiv import ArxivSource
 from news.sources.base import NewsSource
@@ -100,7 +100,7 @@ def _rss_factory(settings: SourceSettings | None) -> list[NewsSource]:
         if isinstance(feed, str):
             sources.append(RssSource(feed_url=feed))
         else:
-            sources.append(RssSource(feed_url=feed["url"], label=feed.get("name")))
+            sources.append(RssSource(feed_url=feed["url"], label=feed.get("name"), lang=feed.get("lang", "en")))
     return sources
 
 
@@ -125,7 +125,8 @@ class PipelineConfig:
     min_shortlist_per_source: int = DEFAULT_MIN_SHORTLIST_PER_SOURCE
     top_n: int = 10
     max_per_source: int = 4
-    embedding_model_name: str = EMBEDDING_MODEL_NAME
+    embedding_model_name: str | None = None
+    """Override; None derives the model from the profile's `languages`."""
     llm_model_name: str = DEFAULT_MODEL_NAME
     force_fetch: bool = False
 
@@ -217,7 +218,7 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
     hard_filtered = apply_hard_filters(raw_items, profile, min_points=min_points)
     _log_by_source("After hard filters", hard_filtered)
 
-    embedder = EmbeddingRanker(cfg.embedding_model_name)
+    embedder = EmbeddingRanker(resolve_embedder(profile.languages, cfg.embedding_model_name))
     scored = embedder.score(hard_filtered, profile)
 
     reranker = LLMReranker(cfg.llm_model_name)
@@ -269,7 +270,7 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
         hard_filtered_count=len(hard_filtered),
         shortlisted_count=sum(1 for s in scored if s.llm_score is not None),
         model_name=cfg.llm_model_name,
-        embedding_model_name=cfg.embedding_model_name,
+        embedding_model_name=embedder.model_name,
     )
     output = RunOutput(meta=meta, items=top)
     out_path = storage.save_run_output(run_dir, output)

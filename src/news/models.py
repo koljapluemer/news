@@ -30,6 +30,11 @@ class RawItem(BaseModel):
     text: str | None = None
     """Self-post / body text, if any, HTML stripped."""
 
+    lang: str = "en"
+    """ISO 639-1 code, declared by the source/feed config rather than
+    detected. Defaults to "en", so sources that never set it (and raw
+    cache files written before this field existed) are English."""
+
     author: str | None = None
     points: int = 0
     num_comments: int = 0

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class InterestEntry(BaseModel):
@@ -47,10 +47,22 @@ def source_matches(source: str, allowed: list[str] | None) -> bool:
 
 
 class InterestProfile(BaseModel):
+    languages: list[str] = Field(default_factory=lambda: ["en"])
+    """Languages the reader reads (ISO 639-1). Items in any other language
+    are dropped in stage 0, and anything beyond ["en"] switches stage 1 to
+    a multilingual embedding model (see `rank.embed.resolve_embedder`)."""
+
     interests: list[InterestEntry]
     anti_interests: list[InterestEntry] = Field(default_factory=list)
     blacklist: Blacklist = Field(default_factory=Blacklist)
     sources: dict[str, SourceSettings] = Field(default_factory=dict)
+
+    @field_validator("languages")
+    @classmethod
+    def _normalize_languages(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("`languages` must list at least one language")
+        return [v.strip().lower() for v in value]
 
     def source_enabled(self, name: str) -> bool:
         """A source not mentioned in `sources:` is enabled by default.

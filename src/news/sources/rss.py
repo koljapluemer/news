@@ -46,8 +46,11 @@ REQUEST_TIMEOUT_SECONDS = 30.0
 class RssSource:
     has_score = False
 
-    def __init__(self, feed_url: str, label: str | None = None, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self, feed_url: str, label: str | None = None, lang: str = "en", client: httpx.Client | None = None
+    ) -> None:
         self.feed_url = feed_url
+        self.lang = lang
         self.name = f"rss:{label or domain_of(feed_url) or feed_url}"
         self._client = client or httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=True)
 
@@ -104,6 +107,7 @@ class RssSource:
             url=link,
             domain=domain_of(link),
             text=clean_html(entry.get("summary")),
+            lang=self.lang,
             author=entry.get("author"),
             points=0,
             num_comments=0,

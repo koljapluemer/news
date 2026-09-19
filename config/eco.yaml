@@ -1,3 +1,5 @@
+languages: [en, de]
+
 interests:
   - text: "urban ecology"
     weight: 0.8
@@ -9,7 +11,6 @@ interests:
 sources:
   reddit:
     enabled: true
-    # Subreddit names, no "r/" prefix.
     subreddits: ["berlin", "nature", "dataisbeautiful", "infographics"]
     front_page: true
   crossref:
@@ -18,3 +19,13 @@ sources:
   openalex:
     enabled: true
     queries: ["urban ecology", "urban eco systems", "sustainable city", "citizen science"]
+  rss: 
+    enabled: true
+    feeds:
+      - 
+        "name": "nabu-berlin"
+        "url": "https://berlin.nabu.de/rssfeed.php"
+      - "name": "nabu-brandenburg"
+        "url": "https://brandenburg.nabu.de/rssfeed.php"
+      - "name": "nabu-niedersachsen"
+        "url": "https://niedersachsen.nabu.de/rssfeed.php"

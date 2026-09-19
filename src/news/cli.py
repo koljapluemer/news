@@ -8,7 +8,6 @@ import typer
 
 from news.logging_setup import configure_logging, logger
 from news.pipeline import PipelineConfig, run_pipeline
-from news.rank.embed import EMBEDDING_MODEL_NAME
 from news.rank.llm_rerank import DEFAULT_MIN_SHORTLIST_PER_SOURCE, DEFAULT_MODEL_NAME
 
 app = typer.Typer(add_completion=False)
@@ -60,7 +59,9 @@ def main(
     data_dir: Path = typer.Option(REPO_ROOT / "data", help="Where raw/run data is stored."),
     log_dir: Path = typer.Option(REPO_ROOT / "logs", help="Where log files are written."),
     llm_model: str = typer.Option(DEFAULT_MODEL_NAME, help="Ollama model for stage-2 reranking."),
-    embedding_model: str = typer.Option(EMBEDDING_MODEL_NAME, help="sentence-transformers model for stage-1 scoring."),
+    embedding_model: str | None = typer.Option(
+        None, help="sentence-transformers model for stage-1 scoring. Default: derived from the profile's languages."
+    ),
     force_fetch: bool = typer.Option(
         False, help="Refetch even if today's raw data is already cached for a source."
     ),

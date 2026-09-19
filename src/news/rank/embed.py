@@ -17,30 +17,60 @@ Interest/anti-interest entries may be scoped to specific sources (see
 per-item weighted-max only considers the subset of entries applicable to
 that item's source, so scoping costs no extra encoding work.
 
-Uses BAAI/bge-base-en-v1.5, which distinguishes "query" (the interest,
-what we're searching for) from "passage" (the story title) -- only the
-query side gets the retrieval instruction prefix.
+The embedding model is derived from the profile's `languages` (see
+`resolve_embedder`): English-only profiles use BAAI/bge-base-en-v1.5, which
+distinguishes "query" (the interest, what we're searching for) from
+"passage" (the story title) -- only the query side gets the retrieval
+instruction prefix. Any other language set uses the multilingual bge-m3,
+which needs no prefixes. Each model's prefixes live in its `EmbedderSpec`,
+so swapping models can't silently apply another model's prefix.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from news.config import InterestProfile, source_matches
 from news.logging_setup import logger
 from news.models import RawItem, ScoredItem
 
-EMBEDDING_MODEL_NAME = "BAAI/bge-base-en-v1.5"
-QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
+
+@dataclass(frozen=True)
+class EmbedderSpec:
+    model_name: str
+    query_prefix: str = ""
+    """Prepended to interests/anti-interests (the search side)."""
+    passage_prefix: str = ""
+    """Prepended to story titles (the searched side)."""
+
+
+ENGLISH_EMBEDDER = EmbedderSpec(
+    "BAAI/bge-base-en-v1.5",
+    query_prefix="Represent this sentence for searching relevant passages: ",
+)
+MULTILINGUAL_EMBEDDER = EmbedderSpec("BAAI/bge-m3")
+KNOWN_EMBEDDERS = {spec.model_name: spec for spec in (ENGLISH_EMBEDDER, MULTILINGUAL_EMBEDDER)}
+
+
+def resolve_embedder(languages: list[str], override: str | None = None) -> EmbedderSpec:
+    """`override` (a model name) wins; a known model keeps its own prefixes,
+    an unknown one is used with none. Otherwise English-only profiles get the
+    English model and everything else the multilingual one."""
+    if override:
+        return KNOWN_EMBEDDERS.get(override, EmbedderSpec(override))
+    return ENGLISH_EMBEDDER if set(languages) <= {"en"} else MULTILINGUAL_EMBEDDER
 
 
 class EmbeddingRanker:
-    def __init__(self, model_name: str = EMBEDDING_MODEL_NAME) -> None:
+    def __init__(self, spec: EmbedderSpec = ENGLISH_EMBEDDER) -> None:
         # Imported lazily: sentence-transformers/torch are slow to import
         # and not needed for e.g. `--help` or fetch-only runs.
         from sentence_transformers import SentenceTransformer
 
-        logger.info("Loading embedding model {}", model_name)
-        self.model = SentenceTransformer(model_name)
-        self.model_name = model_name
+        logger.info("Loading embedding model {}", spec.model_name)
+        self.model = SentenceTransformer(spec.model_name)
+        self.spec = spec
+        self.model_name = spec.model_name
         logger.debug("Embedding model loaded on device {}", self.model.device)
 
     def score(self, items: list[RawItem], profile: InterestProfile) -> list[ScoredItem]:
@@ -49,9 +79,9 @@ class EmbeddingRanker:
         if not items:
             return []
 
-        interest_texts = [QUERY_INSTRUCTION + i.text for i in profile.interests]
+        interest_texts = [self.spec.query_prefix + i.text for i in profile.interests]
         interest_weights = [i.weight for i in profile.interests]
-        anti_texts = [QUERY_INSTRUCTION + i.text for i in profile.anti_interests]
+        anti_texts = [self.spec.query_prefix + i.text for i in profile.anti_interests]
         anti_weights = [i.weight for i in profile.anti_interests]
 
         logger.info(
@@ -63,7 +93,7 @@ class EmbeddingRanker:
         interest_vecs = self.model.encode(interest_texts, normalize_embeddings=True) if interest_texts else None
         anti_vecs = self.model.encode(anti_texts, normalize_embeddings=True) if anti_texts else None
         title_vecs = self.model.encode(
-            [item.title for item in items],
+            [self.spec.passage_prefix + item.title for item in items],
             normalize_embeddings=True,
             show_progress_bar=True,
         )

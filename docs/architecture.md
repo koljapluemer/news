@@ -63,6 +63,16 @@ meaningful on `arxiv`, or an anti-interest like "drama, flame-bait" that
 only applies to `hackernews`. An entry with no `sources` applies
 everywhere. See `config/interests.yaml` for examples of both.
 
+**Languages are a profile-level declaration.** `InterestProfile.languages`
+(default `["en"]`) lists what the reader reads. Items carry a declared
+`RawItem.lang` (default `"en"`; RSS feeds set it via `lang:` per feed),
+stage 0 drops items outside the profile's languages, and stage 1 picks its
+embedding model from the set (`rank.embed.resolve_embedder`): English-only
+keeps bge-base-en, anything else uses multilingual bge-m3. Prefixes live
+with each model's `EmbedderSpec`. Not done yet: reddit/other sources have
+no per-target `lang`, stage-1 scores aren't normalized across languages,
+and LLM `reason` blurbs stay English.
+
 **Cross-source ranking guards against one source dominating.** Two
 separate mechanisms, for two separate failure modes:
 - Stage 2's shortlist selection (`llm_rerank._select_shortlist`)
