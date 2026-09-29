@@ -34,6 +34,8 @@ interests:
     weight: 1.0
   - text: "educational software, digital education, intelligent tutoring system, flashcards, spaced repetition, adaptive learning"
     weight: 1.0
+  - text: "how to learn, skill acquisition, building expertise, getting better"
+    weight: 1.0
   - text: "urban ecology, foraging, birdwatching"
     weight: 0.6
   # EXAMPLE of a source-scoped interest -- narrower than the general
@@ -145,3 +147,5 @@ sources:
         "url": "https://www.nngroup.com/feed/rss/"
       - "name": "ideo"
         "url": "https://www.ideou.com/index.rss"
+      - "name": "art-of-memory"
+        "url": "https://forum.artofmemory.com/posts.rss"
