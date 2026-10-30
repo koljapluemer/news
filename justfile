@@ -1,6 +1,10 @@
 default:
     @just --list
 
+# Run the news parser (fetch, rank, write top items); extra args go to the CLI, e.g. `just news --profile work`
+news *args:
+    uv run news {{args}}
+
 # Run the desktop app with hot reload
 dev:
     cd flutter && flutter run -d linux
